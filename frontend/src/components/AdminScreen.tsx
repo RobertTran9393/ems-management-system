@@ -13,8 +13,38 @@ import {
   UserPlus,
   MapPin,
   Clock,
-  Briefcase
+  Briefcase,
+  Trash2,
+  Filter,
+  Tag
 } from 'lucide-react';
+
+const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: string; placeholderKey: string }> = {
+  PAYROLL: {
+    label: 'BẢNG LƯƠNG & KPI',
+    color: 'bg-amber-50 text-amber-800 border-amber-300',
+    desc: 'Gán vào công thức tính bảng lương & hoa hồng giáo viên/sale',
+    placeholderKey: 'VD: THUONG_CHUYEN_CAN_GV',
+  },
+  ACADEMIC: {
+    label: 'ĐÀO TẠO & GIÁO VỤ',
+    color: 'bg-indigo-50 text-indigo-800 border-indigo-300',
+    desc: 'Gán vào quy chế đào tạo, hạn 24 buổi và bảo lưu',
+    placeholderKey: 'VD: SO_BUOI_TOI_THIEU_TEST',
+  },
+  POS: {
+    label: 'POS & HỌC PHÍ',
+    color: 'bg-blue-50 text-blue-800 border-blue-300',
+    desc: 'Gán vào quy trình thu ngân, biểu phí và bán hàng',
+    placeholderKey: 'VD: PHU_THU_GIAO_TRINH',
+  },
+  GENERAL: {
+    label: 'QUẢN TRỊ & KHÁC',
+    color: 'bg-slate-100 text-slate-700 border-slate-300',
+    desc: 'Cấu hình tham số hệ thống chung',
+    placeholderKey: 'VD: BAN_KINH_CHAM_CONG_MAC_DINH',
+  },
+};
 
 export function AdminScreen() {
   const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'CONFIGS'>('OVERVIEW');
@@ -22,6 +52,7 @@ export function AdminScreen() {
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [configs, setConfigs] = useState<any[]>([]);
+  const [configFilter, setConfigFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,6 +82,7 @@ export function AdminScreen() {
   const [newConfig, setNewConfig] = useState({
     key: '',
     value: '',
+    category: 'PAYROLL',
     description: '',
   });
 
@@ -144,13 +176,13 @@ export function AdminScreen() {
     }
   };
 
-  const handleUpdateConfig = async (key: string, value: string, description?: string) => {
+  const handleUpdateConfig = async (key: string, value: string, description?: string, category?: string) => {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/core/configs/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value, description }),
+        body: JSON.stringify({ value, description, category }),
       });
       const data = await res.json();
       if (data.success) {
@@ -158,6 +190,27 @@ export function AdminScreen() {
         await fetchData();
       } else {
         alert(data.message || 'Lỗi khi cập nhật cấu hình');
+      }
+    } catch (err: any) {
+      alert(`Lỗi kết nối máy chủ: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteConfig = async (key: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xoá tham số "${key}" khỏi hệ thống?`)) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/core/configs/${key}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`Đã xoá tham số ${key} thành công!`);
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi xoá tham số');
       }
     } catch (err: any) {
       alert(`Lỗi kết nối máy chủ: ${err.message}`);
@@ -656,11 +709,11 @@ export function AdminScreen() {
                   try {
                     setLoading(true);
                     const defaultConfigs = [
-                      { key: 'NEW_STUDENT_BONUS', value: '200000', description: 'Định mức thưởng Học viên Mới cho Giáo viên/Sale' },
-                      { key: 'ON_TIME_LEVELUP_BONUS', value: '300000', description: 'Định mức thưởng HV Lên khoá Đúng hạn 3 tháng' },
-                      { key: 'STANDARD_MONTHS', value: '3', description: 'Hạn chuẩn hoàn thành khoá học (tháng)' },
-                      { key: 'MAX_MONTHS', value: '4', description: 'Hạn tối đa hoàn thành khoá học (tháng)' },
-                      { key: 'MAX_RESERVATION_DAYS', value: '90', description: 'Thời gian bảo lưu tối đa (ngày)' },
+                      { key: 'NEW_STUDENT_BONUS', value: '200000', category: 'PAYROLL', description: 'Định mức thưởng Học viên Mới cho Giáo viên/Sale' },
+                      { key: 'ON_TIME_LEVELUP_BONUS', value: '300000', category: 'PAYROLL', description: 'Định mức thưởng HV Lên khoá Đúng hạn 3 tháng' },
+                      { key: 'STANDARD_MONTHS', value: '3', category: 'ACADEMIC', description: 'Hạn chuẩn hoàn thành khoá học (tháng)' },
+                      { key: 'MAX_MONTHS', value: '4', category: 'ACADEMIC', description: 'Hạn tối đa hoàn thành khoá học (tháng)' },
+                      { key: 'MAX_RESERVATION_DAYS', value: '90', category: 'ACADEMIC', description: 'Thời gian bảo lưu tối đa (ngày)' },
                     ];
                     for (const c of defaultConfigs) {
                       await fetch(`${API_BASE_URL}/api/core/configs/${c.key}`, {
@@ -670,7 +723,7 @@ export function AdminScreen() {
                       });
                     }
                     setMessage('Đã khởi tạo bộ 5 tham số cấu hình mặc định thành công!');
-                    fetchData();
+                    await fetchData();
                   } catch (e: any) {
                     alert(e.message);
                   } finally {
@@ -685,61 +738,158 @@ export function AdminScreen() {
             </div>
           </div>
 
-          {/* Form thêm tham số mới tùy chỉnh */}
+          {/* Form thêm tham số mới tùy chỉnh có ô chọn Nghiệp Vụ Gắn Kèm */}
           <div className="p-4 bg-indigo-50/50 border-b border-indigo-100">
-            <div className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1.5">
+            <div className="text-xs font-bold text-indigo-900 mb-2.5 flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5 text-indigo-600" />
-              Thêm Tham Số Tùy Chỉnh Mới:
+              <span>Thêm Tham Số Tùy Chỉnh Mới:</span>
             </div>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!newConfig.key || !newConfig.value) return;
-                await handleUpdateConfig(newConfig.key.trim().toUpperCase(), newConfig.value.trim(), newConfig.description.trim());
-                setNewConfig({ key: '', value: '', description: '' });
+                await handleUpdateConfig(
+                  newConfig.key.trim().toUpperCase(),
+                  newConfig.value.trim(),
+                  newConfig.description.trim(),
+                  newConfig.category
+                );
+                setNewConfig({ key: '', value: '', category: newConfig.category, description: '' });
               }}
-              className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs"
+              className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs"
             >
-              <div>
+              {/* Ô 1: Nghiệp Vụ Gắn Kèm */}
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <Tag className="w-3 h-3 text-indigo-600" />
+                  Nghiệp Vụ Gắn Kèm:
+                </label>
+                <select
+                  value={newConfig.category}
+                  onChange={(e) => setNewConfig({ ...newConfig, category: e.target.value })}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:border-indigo-600 shadow-sm"
+                >
+                  <option value="PAYROLL">💰 Bảng Lương & KPI</option>
+                  <option value="ACADEMIC">📚 Đào Tạo & Giáo Vụ</option>
+                  <option value="POS">💳 POS & Học Phí</option>
+                  <option value="GENERAL">⚙️ Quản Trị & Khác</option>
+                </select>
+                <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                  {BUSINESS_DOMAINS[newConfig.category]?.desc}
+                </span>
+              </div>
+
+              {/* Ô 2: Mã Tham Số */}
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                  Mã Tham Số (In hoa, cách bởi _):
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Mã tham số (VD: DONG_PHUC_FEE)"
+                  placeholder={BUSINESS_DOMAINS[newConfig.category]?.placeholderKey || 'VD: MA_THAM_SO'}
                   value={newConfig.key}
                   onChange={(e) => setNewConfig({ ...newConfig, key: e.target.value })}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:outline-none focus:border-indigo-600"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono font-semibold uppercase focus:outline-none focus:border-indigo-600 shadow-sm"
                 />
               </div>
-              <div>
+
+              {/* Ô 3: Giá Trị */}
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                  Giá Trị:
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Giá trị (VD: 250000)"
+                  placeholder="VD: 500000"
                   value={newConfig.value}
                   onChange={(e) => setNewConfig({ ...newConfig, value: e.target.value })}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-600"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-none focus:border-indigo-600 shadow-sm"
                 />
               </div>
-              <div>
+
+              {/* Ô 4: Mô Tả / Diễn Giải */}
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                  Mô Tả / Diễn Giải Nghiệp Vụ:
+                </label>
                 <input
                   type="text"
-                  placeholder="Mô tả ý nghĩa tham số..."
+                  placeholder="VD: Phụ cấp đi lại cho GV..."
                   value={newConfig.description}
                   onChange={(e) => setNewConfig({ ...newConfig, description: e.target.value })}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-600"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-600 shadow-sm"
                 />
               </div>
-              <div>
+
+              {/* Ô 5: Nút Lưu */}
+              <div className="sm:col-span-1 flex items-end">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1 shadow transition cursor-pointer"
+                  className="w-full py-1.5 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1 shadow transition cursor-pointer"
+                  title="Lưu tham số mới"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Lưu Tham Số Mới</span>
+                  <span>Lưu</span>
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Thanh lọc theo Nghiệp Vụ */}
+          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs">
+            <span className="text-slate-400 text-[11px] font-bold flex items-center gap-1 shrink-0">
+              <Filter className="w-3.5 h-3.5" /> Lọc nghiệp vụ:
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfigFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer shrink-0 ${
+                configFilter === 'ALL'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Tất cả ({configs.length})
+            </button>
+            {Object.entries(BUSINESS_DOMAINS).map(([domainKey, domain]) => {
+              const count = configs.filter((c) => {
+                const detected =
+                  c.category ||
+                  (c.key.includes('BONUS') || c.key.includes('SALARY') || c.key.includes('ALLOWANCE')
+                    ? 'PAYROLL'
+                    : c.key.includes('MONTHS') || c.key.includes('RESERVATION') || c.key.includes('DEADLINE')
+                    ? 'ACADEMIC'
+                    : c.key.includes('FEE') || c.key.includes('PRICE') || c.key.includes('DISCOUNT')
+                    ? 'POS'
+                    : 'GENERAL');
+                return detected === domainKey;
+              }).length;
+
+              return (
+                <button
+                  key={domainKey}
+                  type="button"
+                  onClick={() => setConfigFilter(domainKey)}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                    configFilter === domainKey
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{domain.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      configFilter === domainKey ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -750,46 +900,82 @@ export function AdminScreen() {
                 <p className="text-[11px] text-slate-400 mt-1">Bấm nút "Nạp 5 Cấu Hình Chuẩn" ở góc trên bên phải để nạp ngay các định mức KPI và hạn bảo lưu.</p>
               </div>
             ) : (
-              configs.map((cfg) => {
-                // Determine which business module this config belongs to
-                let domainBadge = { label: 'TÙY CHỈNH', color: 'bg-slate-100 text-slate-700 border-slate-300', desc: 'Tham số bổ sung' };
-                if (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')) {
-                  domainBadge = { label: 'BẢNG LƯƠNG & KPI', color: 'bg-amber-50 text-amber-800 border-amber-300', desc: 'Gán vào công thức tính lương giáo viên hàng tháng' };
-                } else if (cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')) {
-                  domainBadge = { label: 'ĐÀO TẠO & GIÁO VỤ', color: 'bg-indigo-50 text-indigo-800 border-indigo-300', desc: 'Gán vào quy chế bảo lưu và hạn hoàn thành 24 buổi' };
-                } else if (cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')) {
-                  domainBadge = { label: 'POS & HỌC PHÍ', color: 'bg-blue-50 text-blue-800 border-blue-300', desc: 'Gán vào quy trình thu ngân và bán hàng' };
-                }
+              configs
+                .filter((c) => {
+                  if (configFilter === 'ALL') return true;
+                  const detected =
+                    c.category ||
+                    (c.key.includes('BONUS') || c.key.includes('SALARY') || c.key.includes('ALLOWANCE')
+                      ? 'PAYROLL'
+                      : c.key.includes('MONTHS') || c.key.includes('RESERVATION') || c.key.includes('DEADLINE')
+                      ? 'ACADEMIC'
+                      : c.key.includes('FEE') || c.key.includes('PRICE') || c.key.includes('DISCOUNT')
+                      ? 'POS'
+                      : 'GENERAL');
+                  return detected === configFilter;
+                })
+                .map((cfg) => {
+                  const domainKey =
+                    cfg.category ||
+                    (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')
+                      ? 'PAYROLL'
+                      : cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')
+                      ? 'ACADEMIC'
+                      : cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')
+                      ? 'POS'
+                      : 'GENERAL');
+                  const domain = BUSINESS_DOMAINS[domainKey] || BUSINESS_DOMAINS.GENERAL;
 
-                return (
-                  <div key={cfg.id || cfg.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${domainBadge.color}`}>
-                          {domainBadge.label}
-                        </span>
-                        <span className="font-mono text-xs font-bold text-slate-900">{cfg.key}</span>
+                  return (
+                    <div key={cfg.id || cfg.key} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          {/* Dropdown chỉnh nghiệp vụ trực tiếp nếu cần đổi */}
+                          <select
+                            value={domainKey}
+                            onChange={(e) => handleUpdateConfig(cfg.key, cfg.value, cfg.description, e.target.value)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${domain.color}`}
+                            title="Bấm để thay đổi nghiệp vụ gắn kèm"
+                          >
+                            <option value="PAYROLL">💰 BẢNG LƯƠNG & KPI</option>
+                            <option value="ACADEMIC">📚 ĐÀO TẠO & GIÁO VỤ</option>
+                            <option value="POS">💳 POS & HỌC PHÍ</option>
+                            <option value="GENERAL">⚙️ QUẢN TRỊ & KHÁC</option>
+                          </select>
+                          <span className="font-mono text-xs font-bold text-slate-900">{cfg.key}</span>
+                        </div>
+                        <div className="text-xs text-slate-600">{cfg.description || domain.desc}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                          <span>Phạm vi:</span>
+                          <span className="font-medium text-slate-500">{domain.desc}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-600">{cfg.description || domainBadge.desc}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Phạm vi tác động: {domainBadge.desc}</div>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="text"
-                        defaultValue={cfg.value}
-                        onBlur={(e) => {
-                          if (e.target.value !== cfg.value) {
-                            handleUpdateConfig(cfg.key, e.target.value, cfg.description);
-                          }
-                        }}
-                        className="w-40 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-indigo-500 shadow-sm"
-                      />
-                      <span className="text-[11px] text-slate-400">Rời chuột để lưu</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            defaultValue={cfg.value}
+                            onBlur={(e) => {
+                              if (e.target.value !== cfg.value) {
+                                handleUpdateConfig(cfg.key, e.target.value, cfg.description, domainKey);
+                              }
+                            }}
+                            className="w-36 sm:w-44 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-indigo-500 shadow-sm"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteConfig(cfg.key)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          title={`Xoá tham số ${cfg.key}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </div>
         </div>

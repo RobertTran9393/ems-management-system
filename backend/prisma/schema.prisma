@@ -149,6 +149,7 @@ model SystemConfig {
   id          String   @id @default(uuid())
   key         String   @unique
   value       String
+  category    String?  @default("GENERAL") // PAYROLL, ACADEMIC, POS, GENERAL
   description String?
   updatedAt   DateTime @updatedAt @map("updated_at")
 

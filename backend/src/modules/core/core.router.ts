@@ -151,13 +151,36 @@ coreRouter.post('/branches', async (req: Request, res: Response) => {
 coreRouter.put('/configs/:key', async (req: Request, res: Response) => {
   try {
     const { key } = req.params;
-    const { value, description } = req.body;
+    const { value, description, category } = req.body;
+    const updateData: any = { value, description };
+    if (category !== undefined) {
+      updateData.category = category;
+    }
+    const createData: any = { 
+      key, 
+      value, 
+      description, 
+      category: category || 'GENERAL' 
+    };
     const config = await prisma.systemConfig.upsert({
       where: { key },
-      update: { value, description },
-      create: { key, value, description },
+      update: updateData,
+      create: createData,
     });
     return res.json({ success: true, data: config, message: 'Cập nhật cấu hình hệ thống thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 8. Delete System Config
+coreRouter.delete('/configs/:key', async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    await prisma.systemConfig.delete({
+      where: { key },
+    });
+    return res.json({ success: true, message: `Đã xoá tham số ${key}` });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
