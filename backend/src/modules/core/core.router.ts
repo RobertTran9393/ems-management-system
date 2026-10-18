@@ -354,6 +354,71 @@ coreRouter.post('/users', async (req: Request, res: Response) => {
   }
 });
 
+// 5.1 Update User Details & Role (Điều chỉnh vai trò / cơ sở nhân sự)
+coreRouter.put('/users/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role, branchId, fullName, phone, status, contractType, baseSalary, hourlyTeachingRate } = req.body;
+
+    const dataToUpdate: any = {};
+    if (role !== undefined) dataToUpdate.role = role;
+    if (branchId !== undefined) dataToUpdate.branchId = branchId;
+    if (fullName !== undefined) dataToUpdate.fullName = fullName;
+    if (phone !== undefined) dataToUpdate.phone = phone;
+    if (status !== undefined) dataToUpdate.status = status;
+    if (contractType !== undefined) dataToUpdate.contractType = contractType;
+    if (baseSalary !== undefined) dataToUpdate.baseSalary = Math.max(0, Number(baseSalary));
+    if (hourlyTeachingRate !== undefined) dataToUpdate.hourlyTeachingRate = Math.max(0, Number(hourlyTeachingRate));
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: dataToUpdate,
+      select: {
+        id: true,
+        branchId: true,
+        role: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        contractType: true,
+        baseSalary: true,
+        standardMonthlyHours: true,
+        hourlyTeachingRate: true,
+        status: true,
+        branch: { select: { id: true, name: true } },
+      },
+    });
+
+    return res.json({ success: true, data: updatedUser, message: 'Cập nhật thông tin và vai trò nhân sự thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 5.2 Reset Password for User (Đặt lại mật khẩu cho tài khoản)
+coreRouter.post('/users/:id/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    const targetPassword = newPassword && String(newPassword).trim() !== '' ? String(newPassword).trim() : '123456';
+    const passwordHash = await bcrypt.hash(targetPassword, 10);
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+      select: { id: true, fullName: true, email: true },
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã đặt lại mật khẩu cho tài khoản ${user.fullName} (${user.email}) thành công! Mật khẩu mới là: ${targetPassword}`,
+      data: { id: user.id, newPassword: targetPassword },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 6. Create Branch (Quản trị cơ sở)
 coreRouter.post('/branches', async (req: Request, res: Response) => {
   try {
