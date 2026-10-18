@@ -2243,8 +2243,8 @@ export function AdminScreen() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold">
-                      <th className="p-3.5 min-w-[200px]">Vai Trò Hệ Thống</th>
-                      <th className="p-3.5 min-w-[240px]">Mô Tả & Trách Nhiệm</th>
+                      <th className="p-3.5 min-w-[340px] whitespace-nowrap">Vai Trò Hệ Thống</th>
+                      <th className="p-3.5 min-w-[260px]">Mô Tả & Trách Nhiệm</th>
                       {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => (
                         <th key={modKey} className="p-3.5 text-center min-w-[120px]">
                           <div className="font-bold text-slate-900">
@@ -2265,12 +2265,12 @@ export function AdminScreen() {
 
                       return (
                         <tr key={roleKey} className="hover:bg-slate-50/70 transition">
-                          <td className="p-3.5 font-semibold">
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${info.badgeColor}`}>
+                          <td className="p-3.5 font-semibold whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border shrink-0 text-center w-36 shadow-xs ${info.badgeColor}`}>
                                 {roleKey}
                               </span>
-                              <span className="text-slate-800 text-xs font-bold">{info.label}</span>
+                              <span className="text-slate-900 text-xs font-bold whitespace-nowrap">{info.label}</span>
                             </div>
                           </td>
                           <td className="p-3.5 text-slate-500 text-[11px] leading-relaxed">
@@ -3691,8 +3691,8 @@ export function AdminScreen() {
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold">
-                    <th className="p-3.5 min-w-[200px]">Vai Trò Hệ Thống</th>
-                    <th className="p-3.5 min-w-[240px]">Mô Tả & Trách Nhiệm</th>
+                    <th className="p-3.5 min-w-[340px] whitespace-nowrap">Vai Trò Hệ Thống</th>
+                    <th className="p-3.5 min-w-[260px]">Mô Tả & Trách Nhiệm</th>
                     {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => (
                       <th key={modKey} className="p-3.5 text-center min-w-[120px]">
                         <div className="font-bold text-slate-900">
@@ -3713,12 +3713,12 @@ export function AdminScreen() {
 
                     return (
                       <tr key={roleKey} className="hover:bg-slate-50/70 transition">
-                        <td className="p-3.5 font-semibold">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${info.badgeColor}`}>
+                        <td className="p-3.5 font-semibold whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border shrink-0 text-center w-36 shadow-xs ${info.badgeColor}`}>
                               {roleKey}
                             </span>
-                            <span className="text-slate-800 text-xs font-bold">{info.label}</span>
+                            <span className="text-slate-900 text-xs font-bold whitespace-nowrap">{info.label}</span>
                           </div>
                         </td>
                         <td className="p-3.5 text-slate-500 text-[11px] leading-relaxed">
