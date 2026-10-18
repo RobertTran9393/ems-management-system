@@ -47,6 +47,13 @@ export function AdminScreen() {
     gpsRadiusMeters: 200,
   });
 
+  // Form state for creating new custom config
+  const [newConfig, setNewConfig] = useState({
+    key: '',
+    value: '',
+    description: '',
+  });
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -633,12 +640,12 @@ export function AdminScreen() {
       {/* Subtab 4: System Configurations & KPI */}
       {activeSubTab === 'CONFIGS' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2 justify-between items-center">
             <div>
               <h2 className="text-sm font-bold text-slate-800">Cấu Hình Tham Số Nghiệp Vụ Cốt Lõi (SRS v2.0)</h2>
               <span className="text-xs text-slate-500">Toàn bộ thay đổi áp dụng tức thì vào công thức tính bảng lương & đào tạo</span>
             </div>
-            {configs.length === 0 && (
+            <div className="flex items-center gap-2">
               <button
                 onClick={async () => {
                   try {
@@ -668,9 +675,66 @@ export function AdminScreen() {
                 className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Nạp 5 Cấu Hình Mặc Định</span>
+                <span>Nạp 5 Cấu Hình Chuẩn</span>
               </button>
-            )}
+            </div>
+          </div>
+
+          {/* Form thêm tham số mới tùy chỉnh */}
+          <div className="p-4 bg-indigo-50/50 border-b border-indigo-100">
+            <div className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5 text-indigo-600" />
+              Thêm Tham Số Tùy Chỉnh Mới:
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newConfig.key || !newConfig.value) return;
+                await handleUpdateConfig(newConfig.key.trim().toUpperCase(), newConfig.value.trim());
+                setNewConfig({ key: '', value: '', description: '' });
+              }}
+              className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs"
+            >
+              <div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Mã tham số (VD: DONG_PHUC_FEE)"
+                  value={newConfig.key}
+                  onChange={(e) => setNewConfig({ ...newConfig, key: e.target.value })}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Giá trị (VD: 250000)"
+                  value={newConfig.value}
+                  onChange={(e) => setNewConfig({ ...newConfig, value: e.target.value })}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Mô tả ý nghĩa tham số..."
+                  value={newConfig.description}
+                  onChange={(e) => setNewConfig({ ...newConfig, description: e.target.value })}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+              <div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-1 shadow transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Lưu Tham Số Mới</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           <div className="divide-y divide-slate-100">
