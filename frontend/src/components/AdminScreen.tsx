@@ -45,6 +45,8 @@ import {
   UserCheck,
   Shield,
   Key,
+  History,
+  ClipboardList,
 } from 'lucide-react';
 import { useBranding, ALL_MODULE_KEYS, DEFAULT_MODULE_NAMES } from '../context/BrandingContext';
 
@@ -564,6 +566,15 @@ export function AdminScreen() {
   const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
   const [adjustQty, setAdjustQty] = useState<number>(10);
 
+  // Opening stock balance and inventory sub-tabs
+  const [productSubTab, setProductSubTab] = useState<'CATALOG' | 'OPENING_STOCK' | 'LOGS'>('CATALOG');
+  const [selectedStockBranchId, setSelectedStockBranchId] = useState<string>('');
+  const [openingStockItems, setOpeningStockItems] = useState<Record<string, number>>({});
+  const [openingStockNotes, setOpeningStockNotes] = useState<string>('Khai báo số dư tồn kho ban đầu khi vận hành hệ thống');
+  const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -584,6 +595,7 @@ export function AdminScreen() {
         if (branchesRes.data.length > 0) {
           if (!newUser.branchId) setNewUser((prev) => ({ ...prev, branchId: branchesRes.data[0].id }));
           if (!newProduct.branchId) setNewProduct((prev) => ({ ...prev, branchId: branchesRes.data[0].id }));
+          setSelectedStockBranchId((prev) => prev || branchesRes.data[0].id);
         }
       }
       if (configsRes.success) setConfigs(configsRes.data);
@@ -941,6 +953,70 @@ export function AdminScreen() {
       setLoading(false);
     }
   };
+
+  const fetchInventoryLogs = async (branchId?: string) => {
+    try {
+      setLoadingLogs(true);
+      const bId = branchId || selectedStockBranchId;
+      const url = bId
+        ? `${API_BASE_URL}/api/inventory/logs?branchId=${bId}`
+        : `${API_BASE_URL}/api/inventory/logs`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        setInventoryLogs(data.data);
+      }
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const handleSaveOpeningStock = async () => {
+    const targetBranch = selectedStockBranchId || branches[0]?.id;
+    if (!targetBranch) {
+      alert('Vui lòng chọn cơ sở chi nhánh');
+      return;
+    }
+
+    const items = products.map((prod) => {
+      const currentQty = prod.branchStocks?.find((bs: any) => bs.branchId === targetBranch)?.quantity || 0;
+      const declaredQty = openingStockItems[prod.id] !== undefined ? Number(openingStockItems[prod.id]) : currentQty;
+      return {
+        productId: prod.id,
+        quantity: Math.max(0, declaredQty),
+      };
+    });
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/inventory/opening-stock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branchId: targetBranch,
+          items,
+          notes: openingStockNotes || 'Khai báo tồn kho đầu kỳ khi đưa hệ thống vào vận hành',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(data.message || 'Đã thiết lập tồn kho đầu kỳ thành công!');
+        await fetchData();
+        if (productSubTab === 'LOGS') {
+          fetchInventoryLogs(targetBranch);
+        }
+      } else {
+        alert(data.message || 'Lỗi khi lưu tồn kho đầu kỳ');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1796,211 +1872,576 @@ export function AdminScreen() {
       {/* Subtab: Products & Inventory Settings */}
       {activeSubTab === 'PRODUCTS' && (
         <div className="space-y-6">
-          {/* Form thêm sản phẩm mới */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-indigo-600" />
-                  Cài Đặt & Thêm Sản Phẩm / Giáo Cụ Mới
-                </h2>
-                <span className="text-xs text-slate-500">Giáo trình, bàn tính, đồng phục, phụ kiện phục vụ học tập</span>
-              </div>
+          {/* Subview Selector & Branch Filter */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setProductSubTab('CATALOG')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  productSubTab === 'CATALOG'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Package className="w-4 h-4" />
+                <span>Danh Mục & Thêm Sản Phẩm</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProductSubTab('OPENING_STOCK');
+                  const currentBranch = selectedStockBranchId || branches[0]?.id;
+                  const initialMap: Record<string, number> = {};
+                  products.forEach((p) => {
+                    const st = p.branchStocks?.find((bs: any) => bs.branchId === currentBranch);
+                    initialMap[p.id] = st ? st.quantity : 0;
+                  });
+                  setOpeningStockItems(initialMap);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  productSubTab === 'OPENING_STOCK'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Boxes className="w-4 h-4" />
+                <span>Khai Báo Tồn Kho Đầu Kỳ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProductSubTab('LOGS');
+                  fetchInventoryLogs(selectedStockBranchId);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  productSubTab === 'LOGS'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                <span>Nhật Ký Nhập / Xuất Kho</span>
+              </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã SKU (In hoa)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: BOOK-SB2"
-                    value={newProduct.sku}
-                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
-                  />
+            <div className="flex items-center gap-2 text-xs">
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <span className="font-semibold text-slate-600">Cơ sở chi nhánh:</span>
+              <select
+                value={selectedStockBranchId}
+                onChange={(e) => {
+                  const bId = e.target.value;
+                  setSelectedStockBranchId(bId);
+                  const initialMap: Record<string, number> = {};
+                  products.forEach((p) => {
+                    const st = p.branchStocks?.find((bs: any) => bs.branchId === bId);
+                    initialMap[p.id] = st ? st.quantity : 0;
+                  });
+                  setOpeningStockItems(initialMap);
+                  if (productSubTab === 'LOGS') {
+                    fetchInventoryLogs(bId);
+                  }
+                }}
+                className="border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-600"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* VIEW 1: CATALOG & PRODUCT MANAGEMENT */}
+          {productSubTab === 'CATALOG' && (
+            <div className="space-y-6">
+              {/* Form thêm sản phẩm mới */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Package className="w-4 h-4 text-indigo-600" />
+                      Cài Đặt & Thêm Sản Phẩm / Giáo Cụ Mới
+                    </h2>
+                    <span className="text-xs text-slate-500">Giáo trình, bàn tính, đồng phục, phụ kiện phục vụ học tập</span>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Sản Phẩm / Giáo Cụ</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: Sách Giáo Trình Soroban Cấp 2"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
-                  />
+                <form onSubmit={handleCreateProduct} className="p-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã SKU (In hoa)</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: BOOK-SB2"
+                        value={newProduct.sku}
+                        onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Sản Phẩm / Giáo Cụ</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: Sách Giáo Trình Soroban Cấp 2"
+                        value={newProduct.name}
+                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Đơn Vị Tính</label>
+                      <select
+                        value={newProduct.unit}
+                        onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                      >
+                        <option value="Quyển">Quyển (Sách, giáo trình)</option>
+                        <option value="Cái">Cái (Bàn tính, thước kẻ)</option>
+                        <option value="Bộ">Bộ (Đồng phục, combo cụ)</option>
+                        <option value="Chiếc">Chiếc (Balo, túi xách)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Cơ Sở Khởi Tạo Ban Đầu</label>
+                      <select
+                        value={newProduct.branchId || selectedStockBranchId}
+                        onChange={(e) => setNewProduct({ ...newProduct, branchId: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                      >
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Vốn Nhập Kho (VNĐ)</label>
+                      <input
+                        type="number"
+                        step="5000"
+                        required
+                        value={newProduct.costPrice}
+                        onChange={(e) => setNewProduct({ ...newProduct, costPrice: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold text-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Bán Niêm Yết Lẻ (VNĐ)</label>
+                      <input
+                        type="number"
+                        step="5000"
+                        required
+                        value={newProduct.sellingPrice}
+                        onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-indigo-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Số Lượng Nhập Ban Đầu</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={newProduct.initialQty}
+                        onChange={(e) => setNewProduct({ ...newProduct, initialQty: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-emerald-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Lưu Sản Phẩm Mới</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Danh sách Sản Phẩm & Tồn Kho */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Danh Mục Sản Phẩm & Bảng Giá</h3>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Đang xem tồn kho tại:{' '}
+                      <strong className="text-indigo-700">
+                        {branches.find((b) => b.id === selectedStockBranchId)?.name || 'Tất cả chi nhánh'}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProductSubTab('OPENING_STOCK')}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Boxes className="w-3.5 h-3.5" />
+                      Khai Báo Tồn Kho Đầu Kỳ
+                    </button>
+                    <span className="text-xs text-slate-500 font-medium">{products.length} mặt hàng</span>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Đơn Vị Tính</label>
-                  <select
-                    value={newProduct.unit}
-                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
-                  >
-                    <option value="Quyển">Quyển (Sách, giáo trình)</option>
-                    <option value="Cái">Cái (Bàn tính, thước kẻ)</option>
-                    <option value="Bộ">Bộ (Đồng phục, combo cụ)</option>
-                    <option value="Chiếc">Chiếc (Balo, túi xách)</option>
-                  </select>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                        <th className="p-3.5">Mã SKU</th>
+                        <th className="p-3.5">Tên Sản Phẩm</th>
+                        <th className="p-3.5 text-center">ĐVT</th>
+                        <th className="p-3.5 text-right">Giá Vốn (VNĐ)</th>
+                        <th className="p-3.5 text-right">Giá Bán Lẻ (VNĐ)</th>
+                        <th className="p-3.5 text-center">Tồn Tại Cơ Sở</th>
+                        <th className="p-3.5 text-center">Tổng Toàn Hệ Thống</th>
+                        <th className="p-3.5 text-center">Trạng Thái</th>
+                        <th className="p-3.5 text-center">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {products.map((prod) => {
+                        const totalQty = prod.branchStocks?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
+                        const branchQty = prod.branchStocks?.find((bs: any) => bs.branchId === selectedStockBranchId)?.quantity || 0;
+                        return (
+                          <tr key={prod.id} className="hover:bg-slate-50 transition">
+                            <td className="p-3.5 font-mono font-bold text-slate-900">{prod.sku}</td>
+                            <td className="p-3.5 font-semibold text-slate-800">{prod.name}</td>
+                            <td className="p-3.5 text-center text-slate-600">{prod.unit}</td>
+                            <td className="p-3.5 text-right">
+                              <input
+                                type="number"
+                                step="5000"
+                                defaultValue={Number(prod.costPrice)}
+                                onBlur={(e) => {
+                                  if (Number(e.target.value) !== Number(prod.costPrice)) {
+                                    handleUpdateProduct(prod.id, { costPrice: Number(e.target.value) });
+                                  }
+                                }}
+                                className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg text-slate-700 bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                                title="Sửa giá vốn rồi rời chuột để lưu"
+                              />
+                            </td>
+                            <td className="p-3.5 text-right">
+                              <input
+                                type="number"
+                                step="5000"
+                                defaultValue={Number(prod.sellingPrice)}
+                                onBlur={(e) => {
+                                  if (Number(e.target.value) !== Number(prod.sellingPrice)) {
+                                    handleUpdateProduct(prod.id, { sellingPrice: Number(e.target.value) });
+                                  }
+                                }}
+                                className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                                title="Sửa giá bán rồi rời chuột để lưu"
+                              />
+                            </td>
+                            <td className="p-3.5 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                branchQty > 5 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {branchQty} {prod.unit}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-center">
+                              <span className="font-bold text-slate-700">{totalQty} {prod.unit}</span>
+                            </td>
+                            <td className="p-3.5 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {prod.status}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetBranch = selectedStockBranchId || branches[0]?.id;
+                                  const qtyStr = prompt(`Nhập số lượng bổ sung vào kho cho "${prod.name}":`, '10');
+                                  if (qtyStr && !isNaN(Number(qtyStr)) && targetBranch) {
+                                    handleAdjustStock(prod.id, targetBranch, Number(qtyStr));
+                                  }
+                                }}
+                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                + Nhập Thêm
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Cơ Sở Nhập Kho Đầu Kỳ</label>
-                  <select
-                    value={newProduct.branchId}
-                    onChange={(e) => setNewProduct({ ...newProduct, branchId: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+          {/* VIEW 2: KHAI BÁO TỒN KHO ĐẦU KỲ */}
+          {productSubTab === 'OPENING_STOCK' && (
+            <div className="space-y-6">
+              {/* Explainer banner */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                <Boxes className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                <div className="text-xs text-emerald-900 space-y-1">
+                  <div className="font-bold text-emerald-950 text-sm">
+                    Khai Báo Số Dư Tồn Kho Đầu Kỳ — Cơ Sở: {branches.find((b) => b.id === selectedStockBranchId)?.name || 'Chưa chọn'}
+                  </div>
+                  <p className="leading-relaxed">
+                    Khai báo tồn kho đầu kỳ giúp ghi nhận chính xác số lượng sách giáo trình, bàn tính Soroban, đồng phục và đồ dùng học tập đang có thực tế tại cơ sở vào thời điểm bắt đầu đưa phần mềm EMS vào vận hành. 
+                    Thao tác này được hệ thống ghi nhận dạng <strong>OPENING_BALANCE</strong> độc lập, không làm biến động doanh số thu ngân hay chi phí mua hàng kỳ này.
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Vốn Nhập Kho (VNĐ)</label>
-                  <input
-                    type="number"
-                    step="5000"
-                    required
-                    value={newProduct.costPrice}
-                    onChange={(e) => setNewProduct({ ...newProduct, costPrice: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold text-slate-700"
-                  />
+              {/* Bảng nhập tồn đầu kỳ hàng loạt */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Bảng Kiểm Kê & Thiết Lập Tồn Kho Đầu Kỳ</h3>
+                    <span className="text-xs text-slate-500">
+                      Nhập số lượng thực tế kiểm kê tại kho. Nếu chưa có, mặc định lấy số lượng hiện tại.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-600">Ghi chú đợt kiểm kê:</span>
+                    <input
+                      type="text"
+                      value={openingStockNotes}
+                      onChange={(e) => setOpeningStockNotes(e.target.value)}
+                      placeholder="VD: Kiểm kê ngày 01/10/2026 khi vận hành hệ thống"
+                      className="px-3 py-1.5 border border-slate-300 rounded-xl text-xs bg-white w-72 focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Bán Niêm Yết Lẻ (VNĐ)</label>
-                  <input
-                    type="number"
-                    step="5000"
-                    required
-                    value={newProduct.sellingPrice}
-                    onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-indigo-700"
-                  />
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                        <th className="p-3.5">Mã SKU</th>
+                        <th className="p-3.5">Tên Sản Phẩm / Giáo Cụ</th>
+                        <th className="p-3.5 text-center">ĐVT</th>
+                        <th className="p-3.5 text-right">Giá Vốn Nhập</th>
+                        <th className="p-3.5 text-center">Tồn Hiện Tại</th>
+                        <th className="p-3.5 text-center bg-emerald-50 text-emerald-900 border-x border-emerald-200">
+                          Tồn Đầu Kỳ Thực Tế
+                        </th>
+                        <th className="p-3.5 text-center">Chênh Lệch</th>
+                        <th className="p-3.5 text-right">Giá Trị Tồn Đầu Kỳ (VNĐ)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {products.map((prod) => {
+                        const currentQty = prod.branchStocks?.find((bs: any) => bs.branchId === selectedStockBranchId)?.quantity || 0;
+                        const declaredQty = openingStockItems[prod.id] !== undefined ? openingStockItems[prod.id] : currentQty;
+                        const diff = declaredQty - currentQty;
+                        const totalValue = declaredQty * Number(prod.costPrice);
+
+                        return (
+                          <tr key={prod.id} className="hover:bg-slate-50 transition">
+                            <td className="p-3.5 font-mono font-bold text-slate-900">{prod.sku}</td>
+                            <td className="p-3.5 font-semibold text-slate-800">{prod.name}</td>
+                            <td className="p-3.5 text-center text-slate-600">{prod.unit}</td>
+                            <td className="p-3.5 text-right text-slate-700 font-medium">
+                              {Number(prod.costPrice).toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="p-3.5 text-center font-bold text-slate-600">
+                              {currentQty} {prod.unit}
+                            </td>
+                            <td className="p-3.5 text-center bg-emerald-50/50 border-x border-emerald-100">
+                              <input
+                                type="number"
+                                min="0"
+                                value={declaredQty}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setOpeningStockItems((prev) => ({ ...prev, [prod.id]: val }));
+                                }}
+                                className="w-24 px-2 py-1 text-center border-2 border-emerald-400 rounded-lg font-bold text-emerald-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+                              />
+                            </td>
+                            <td className="p-3.5 text-center">
+                              {diff === 0 ? (
+                                <span className="text-slate-400 font-medium">0</span>
+                              ) : diff > 0 ? (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  +{diff}
+                                </span>
+                              ) : (
+                                <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  {diff}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3.5 text-right font-bold text-slate-900">
+                              {totalValue.toLocaleString('vi-VN')} đ
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Số Lượng Nhập Ban Đầu</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={newProduct.initialQty}
-                    onChange={(e) => setNewProduct({ ...newProduct, initialQty: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-emerald-700"
-                  />
+
+                {/* Tổng kết & Nút Lưu */}
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4 text-xs">
+                    <span className="text-slate-600">
+                      Tổng số mặt hàng: <strong className="text-slate-900">{products.length}</strong>
+                    </span>
+                    <span className="text-slate-600">
+                      Tổng số lượng tồn đầu kỳ:{' '}
+                      <strong className="text-emerald-700 font-bold">
+                        {products.reduce((acc, prod) => {
+                          const currentQty = prod.branchStocks?.find((bs: any) => bs.branchId === selectedStockBranchId)?.quantity || 0;
+                          const declaredQty = openingStockItems[prod.id] !== undefined ? openingStockItems[prod.id] : currentQty;
+                          return acc + declaredQty;
+                        }, 0)}{' '}
+                        sản phẩm
+                      </strong>
+                    </span>
+                    <span className="text-slate-600">
+                      Tổng giá trị vốn kho đầu kỳ:{' '}
+                      <strong className="text-indigo-700 font-bold">
+                        {products.reduce((acc, prod) => {
+                          const currentQty = prod.branchStocks?.find((bs: any) => bs.branchId === selectedStockBranchId)?.quantity || 0;
+                          const declaredQty = openingStockItems[prod.id] !== undefined ? openingStockItems[prod.id] : currentQty;
+                          return acc + declaredQty * Number(prod.costPrice);
+                        }, 0).toLocaleString('vi-VN')}{' '}
+                        VNĐ
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={handleSaveOpeningStock}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow transition cursor-pointer"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Lưu Số Dư Tồn Kho Đầu Kỳ</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="flex justify-end pt-2">
+          {/* VIEW 3: NHẬT KÝ NHẬP / XUẤT KHO */}
+          {productSubTab === 'LOGS' && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <History className="w-4 h-4 text-purple-600" />
+                    Lịch Sử Biến Động Kho Vật Tư & Tồn Đầu Kỳ
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    Theo dõi đầy đủ vết kiểm kê đầu kỳ, nhập hàng, bán lẻ POS và điều chỉnh kho
+                  </span>
+                </div>
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
+                  type="button"
+                  onClick={() => fetchInventoryLogs(selectedStockBranchId)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Lưu Sản Phẩm Mới</span>
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                  Làm mới
                 </button>
               </div>
-            </form>
-          </div>
 
-          {/* Danh sách Sản Phẩm & Tồn Kho */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-800">Danh Mục Sản Phẩm & Tồn Kho Chi Nhánh</h3>
-              <span className="text-xs text-slate-500 font-medium">{products.length} mặt hàng</span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
-                    <th className="p-3.5">Mã SKU</th>
-                    <th className="p-3.5">Tên Sản Phẩm</th>
-                    <th className="p-3.5 text-center">ĐVT</th>
-                    <th className="p-3.5 text-right">Giá Vốn (VNĐ)</th>
-                    <th className="p-3.5 text-right">Giá Bán Niêm Yết (VNĐ)</th>
-                    <th className="p-3.5 text-center">Tồn Kho</th>
-                    <th className="p-3.5 text-center">Trạng Thái</th>
-                    <th className="p-3.5 text-center">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {products.map((prod) => {
-                    const totalQty = prod.branchStocks?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
-                    return (
-                      <tr key={prod.id} className="hover:bg-slate-50 transition">
-                        <td className="p-3.5 font-mono font-bold text-slate-900">{prod.sku}</td>
-                        <td className="p-3.5 font-semibold text-slate-800">{prod.name}</td>
-                        <td className="p-3.5 text-center text-slate-600">{prod.unit}</td>
-                        <td className="p-3.5 text-right">
-                          <input
-                            type="number"
-                            step="5000"
-                            defaultValue={Number(prod.costPrice)}
-                            onBlur={(e) => {
-                              if (Number(e.target.value) !== Number(prod.costPrice)) {
-                                handleUpdateProduct(prod.id, { costPrice: Number(e.target.value) });
-                              }
-                            }}
-                            className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg text-slate-700 bg-white focus:outline-none focus:border-indigo-600"
-                            title="Sửa giá vốn rồi rời chuột để lưu"
-                          />
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <input
-                            type="number"
-                            step="5000"
-                            defaultValue={Number(prod.sellingPrice)}
-                            onBlur={(e) => {
-                              if (Number(e.target.value) !== Number(prod.sellingPrice)) {
-                                handleUpdateProduct(prod.id, { sellingPrice: Number(e.target.value) });
-                              }
-                            }}
-                            className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
-                            title="Sửa giá bán rồi rời chuột để lưu"
-                          />
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                            totalQty > 10 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                            {totalQty} {prod.unit}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {prod.status}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const qtyStr = prompt(`Nhập số lượng bổ sung vào kho cho "${prod.name}":`, '10');
-                              if (qtyStr && !isNaN(Number(qtyStr)) && branches.length > 0) {
-                                handleAdjustStock(prod.id, branches[0].id, Number(qtyStr));
-                              }
-                            }}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-semibold transition cursor-pointer"
-                          >
-                            + Nhập Kho
-                          </button>
-                        </td>
+              {loadingLogs ? (
+                <div className="p-8 text-center text-xs text-slate-500">Đang tải lịch sử kho...</div>
+              ) : inventoryLogs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 italic">
+                  Chưa có giao dịch kho nào được ghi nhận cho cơ sở này.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                        <th className="p-3.5">Thời Gian</th>
+                        <th className="p-3.5">Mã SKU</th>
+                        <th className="p-3.5">Tên Sản Phẩm</th>
+                        <th className="p-3.5 text-center">Biến Động Số Lượng</th>
+                        <th className="p-3.5 text-center">Loại Thao Tác</th>
+                        <th className="p-3.5">Ghi Chú / Mã Tham Chiếu</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {inventoryLogs.map((log) => {
+                        const isPositive = log.changeQty > 0;
+                        let badgeClass = 'bg-slate-100 text-slate-700';
+                        let actionLabel = log.actionType;
+
+                        if (log.actionType === 'OPENING_BALANCE') {
+                          badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
+                          actionLabel = '📦 TỒN KHO ĐẦU KỲ';
+                        } else if (log.actionType === 'INITIAL_STOCK') {
+                          badgeClass = 'bg-blue-100 text-blue-800 border-blue-300';
+                          actionLabel = '🌱 TỒN BAN ĐẦU';
+                        } else if (log.actionType === 'RESTOCK' || log.actionType === 'IMPORT') {
+                          badgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-300';
+                          actionLabel = '📥 NHẬP HÀNG';
+                        } else if (log.actionType === 'POS_SALE') {
+                          badgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
+                          actionLabel = '🛒 BÁN LẺ POS';
+                        } else if (log.actionType === 'ADJUSTMENT') {
+                          badgeClass = 'bg-purple-100 text-purple-800 border-purple-300';
+                          actionLabel = '⚖️ ĐIỀU CHỈNH';
+                        }
+
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-50 transition">
+                            <td className="p-3.5 text-slate-600 font-mono">
+                              {new Date(log.createdAt).toLocaleString('vi-VN')}
+                            </td>
+                            <td className="p-3.5 font-mono font-bold text-slate-900">{log.product?.sku}</td>
+                            <td className="p-3.5 font-semibold text-slate-800">{log.product?.name}</td>
+                            <td className="p-3.5 text-center">
+                              <span
+                                className={`font-bold px-2 py-0.5 rounded ${
+                                  isPositive
+                                    ? 'text-emerald-700 bg-emerald-50'
+                                    : log.changeQty < 0
+                                    ? 'text-rose-700 bg-rose-50'
+                                    : 'text-slate-500 bg-slate-50'
+                                }`}
+                              >
+                                {isPositive ? `+${log.changeQty}` : log.changeQty} {log.product?.unit}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] border ${badgeClass}`}>
+                                {actionLabel}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-slate-600">{log.referenceId || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       )}
 

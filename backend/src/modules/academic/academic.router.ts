@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
-import { AssessmentType, EnrollmentStatus } from '@prisma/client';
+import { AssessmentType, EnrollmentStatus, AttendanceStatus, AttendanceType } from '@prisma/client';
 import { eventBus, DomainEvent } from '../../events/event-bus';
 
 export const academicRouter = Router();
@@ -288,3 +288,233 @@ academicRouter.post('/enrollments/:id/activate-next-combo', async (req: Request,
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// 7. Khởi Tạo Khóa Học Đang Dở Dang (Nhập học viên đang học khi bắt đầu dùng EMS)
+academicRouter.post('/enrollments/in-progress', async (req: Request, res: Response) => {
+  try {
+    const {
+      branchId,
+      studentId: existingStudentId,
+      studentCode: customStudentCode,
+      fullName,
+      dob,
+      gender,
+      parentName,
+      parentPhone,
+      courseId,
+      classId,
+      teacherId,
+      totalSessions = 24,
+      attendedSessions = 0,
+      makeupPendingSessions = 0,
+      startDate,
+      standardMonths = 3,
+      maxMonths = 4,
+      entryScore,
+      entryComment,
+      midtermScore,
+      midtermComment,
+      notes,
+    } = req.body;
+
+    if (!branchId) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn cơ sở chi nhánh' });
+    }
+    if (!courseId) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn khóa học' });
+    }
+    if (!fullName || !parentPhone) {
+      return res.status(400).json({ success: false, message: 'Vui lòng điền Họ tên học viên và Số điện thoại phụ huynh' });
+    }
+
+    // 1. Resolve or Create Student
+    let student = null;
+    if (existingStudentId) {
+      student = await prisma.student.findUnique({ where: { id: existingStudentId } });
+    }
+    if (!student && parentPhone) {
+      student = await prisma.student.findFirst({
+        where: {
+          parentPhone: String(parentPhone).trim(),
+          branchId,
+        },
+      });
+    }
+
+    if (!student) {
+      const generatedCode = customStudentCode || `HV-${Date.now().toString().slice(-6)}`;
+      student = await prisma.student.create({
+        data: {
+          studentCode: generatedCode,
+          branchId,
+          fullName: String(fullName).trim(),
+          dob: dob ? new Date(dob) : null,
+          gender: gender || 'Khác',
+          parentName: String(parentName || fullName).trim(),
+          parentPhone: String(parentPhone).trim(),
+          status: 'ACTIVE',
+        },
+      });
+    } else {
+      await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          fullName: fullName ? String(fullName).trim() : student.fullName,
+          dob: dob ? new Date(dob) : student.dob,
+          gender: gender || student.gender,
+          parentName: parentName ? String(parentName).trim() : student.parentName,
+        },
+      });
+    }
+
+    // 2. Resolve Class and Teacher
+    let resolvedTeacherId = teacherId || null;
+    let targetClass = null;
+    if (classId) {
+      targetClass = await prisma.class.findUnique({
+        where: { id: classId },
+        include: { sessions: { orderBy: { sessionNumber: 'asc' } } },
+      });
+      if (targetClass && !resolvedTeacherId) {
+        resolvedTeacherId = targetClass.mainTeacherId;
+      }
+    }
+
+    if (!resolvedTeacherId) {
+      const defaultTeacher = await prisma.user.findFirst({
+        where: {
+          branchId,
+          role: { in: ['TEACHER', 'ADMIN', 'ACADEMIC_AFFAIRS'] },
+        },
+      });
+      if (defaultTeacher) {
+        resolvedTeacherId = defaultTeacher.id;
+      }
+    }
+
+    // 3. Calculate Sessions and Deadlines
+    const total = Number(totalSessions) || 24;
+    const attended = Math.min(total, Math.max(0, Number(attendedSessions) || 0));
+    const makeup = Math.max(0, Number(makeupPendingSessions) || 0);
+    const remaining = Math.max(0, total - attended - makeup);
+
+    const activationDate = startDate ? new Date(startDate) : new Date();
+    const standardDeadlineDate = new Date(activationDate);
+    standardDeadlineDate.setMonth(standardDeadlineDate.getMonth() + Number(standardMonths || 3));
+    const maxExpiredDate = new Date(activationDate);
+    maxExpiredDate.setMonth(maxExpiredDate.getMonth() + Number(maxMonths || 4));
+
+    // 4. Create Enrollment
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        studentId: student.id,
+        courseId,
+        currentClassId: classId || null,
+        assignedTeacherId: resolvedTeacherId,
+        totalSessions: total,
+        attendedSessions: attended,
+        makeupPendingSessions: makeup,
+        remainingSessions: remaining,
+        activationDate,
+        standardDeadlineDate,
+        maxExpiredDate,
+        status: EnrollmentStatus.ACTIVE,
+      },
+      include: {
+        student: true,
+        course: true,
+        currentClass: true,
+      },
+    });
+
+    // 5. If Class has sessions and attended > 0, generate past Attendance records
+    if (targetClass && targetClass.sessions && targetClass.sessions.length > 0 && attended > 0) {
+      const pastSessions = targetClass.sessions.filter((s) => s.sessionNumber <= attended);
+      for (const sess of pastSessions) {
+        await prisma.attendance.upsert({
+          where: {
+            classSessionId_studentId: {
+              classSessionId: sess.id,
+              studentId: student.id,
+            },
+          },
+          update: {
+            enrollmentId: enrollment.id,
+            status: AttendanceStatus.PRESENT,
+            teacherComment: notes || 'Ghi nhận hoàn thành trước khi số hóa EMS',
+          },
+          create: {
+            classSessionId: sess.id,
+            studentId: student.id,
+            enrollmentId: enrollment.id,
+            attendanceType: AttendanceType.REGULAR,
+            status: AttendanceStatus.PRESENT,
+            teacherComment: notes || 'Ghi nhận hoàn thành trước khi số hóa EMS',
+          },
+        });
+      }
+    }
+
+    // 6. Assessments (Entry Test & Midterm Test)
+    if (resolvedTeacherId && entryScore !== undefined && entryScore !== null && entryScore !== '') {
+      await prisma.studentAssessment.upsert({
+        where: {
+          enrollmentId_testType: {
+            enrollmentId: enrollment.id,
+            testType: AssessmentType.ENTRY_TEST,
+          },
+        },
+        update: {
+          score: Number(entryScore),
+          evaluationDetails: entryComment || 'Đánh giá đầu vào lúc bắt đầu học',
+          isPassed: Number(entryScore) >= 5,
+        },
+        create: {
+          enrollmentId: enrollment.id,
+          studentId: student.id,
+          teacherId: resolvedTeacherId,
+          testType: AssessmentType.ENTRY_TEST,
+          sessionNumber: 1,
+          score: Number(entryScore),
+          evaluationDetails: entryComment || 'Đánh giá đầu vào lúc bắt đầu học',
+          isPassed: Number(entryScore) >= 5,
+        },
+      });
+    }
+
+    if (resolvedTeacherId && midtermScore !== undefined && midtermScore !== null && midtermScore !== '' && attended >= 12) {
+      await prisma.studentAssessment.upsert({
+        where: {
+          enrollmentId_testType: {
+            enrollmentId: enrollment.id,
+            testType: AssessmentType.MIDTERM_TEST,
+          },
+        },
+        update: {
+          score: Number(midtermScore),
+          evaluationDetails: midtermComment || 'Kiểm tra giữa kỳ (Buổi 12) - Dữ liệu dở dang',
+          isPassed: Number(midtermScore) >= 5,
+        },
+        create: {
+          enrollmentId: enrollment.id,
+          studentId: student.id,
+          teacherId: resolvedTeacherId,
+          testType: AssessmentType.MIDTERM_TEST,
+          sessionNumber: 12,
+          score: Number(midtermScore),
+          evaluationDetails: midtermComment || 'Kiểm tra giữa kỳ (Buổi 12) - Dữ liệu dở dang',
+          isPassed: Number(midtermScore) >= 5,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: enrollment,
+      message: `Khởi tạo thành công khóa học dở dang cho học viên "${student.fullName}" (${attended}/${total} buổi đã học)!`,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+

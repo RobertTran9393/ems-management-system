@@ -122,3 +122,78 @@ inventoryRouter.delete('/products/:id', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// 6. Set Opening Stock Balance (Khai báo Tồn Kho Đầu Kỳ)
+inventoryRouter.post('/opening-stock', async (req: Request, res: Response) => {
+  try {
+    const { branchId, items, notes } = req.body;
+    if (!branchId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'branchId và danh sách items (mặt hàng) là bắt buộc' });
+    }
+
+    const updatedItems = [];
+    for (const item of items) {
+      const { productId, quantity } = item;
+      if (!productId) continue;
+
+      const newQty = Math.max(0, Number(quantity) || 0);
+
+      // Check current stock
+      const existingStock = await prisma.branchStock.findUnique({
+        where: { branchId_productId: { branchId, productId } },
+      });
+
+      const oldQty = existingStock?.quantity || 0;
+      const diff = newQty - oldQty;
+
+      const stock = await prisma.branchStock.upsert({
+        where: { branchId_productId: { branchId, productId } },
+        update: { quantity: newQty },
+        create: { branchId, productId, quantity: newQty },
+      });
+
+      await prisma.inventoryLog.create({
+        data: {
+          branchId,
+          productId,
+          changeQty: diff,
+          actionType: 'OPENING_BALANCE',
+          referenceId: notes || 'Khai báo tồn kho đầu kỳ',
+        },
+      });
+
+      updatedItems.push(stock);
+    }
+
+    return res.json({
+      success: true,
+      message: `Đã thiết lập tồn kho đầu kỳ cho ${updatedItems.length} mặt hàng thành công!`,
+      data: updatedItems,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 7. Get Inventory Logs
+inventoryRouter.get('/logs', async (req: Request, res: Response) => {
+  try {
+    const { branchId, productId, actionType } = req.query;
+    const logs = await prisma.inventoryLog.findMany({
+      where: {
+        branchId: branchId ? String(branchId) : undefined,
+        productId: productId ? String(productId) : undefined,
+        actionType: actionType ? String(actionType) : undefined,
+      },
+      include: {
+        product: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return res.json({ success: true, data: logs });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
