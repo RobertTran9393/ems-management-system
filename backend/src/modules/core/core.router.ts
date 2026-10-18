@@ -76,6 +76,30 @@ coreRouter.get('/configs', async (req: Request, res: Response) => {
   }
 });
 
+// 3.1 Batch Seed Default Configs (Nạp 5 cấu hình chuẩn)
+coreRouter.post('/configs/seed-defaults', async (req: Request, res: Response) => {
+  try {
+    const defaultConfigs = [
+      { key: 'NEW_STUDENT_BONUS', value: '200000', category: 'PAYROLL', description: 'Định mức thưởng Học viên Mới cho Giáo viên/Sale' },
+      { key: 'ON_TIME_LEVELUP_BONUS', value: '300000', category: 'PAYROLL', description: 'Định mức thưởng HV Lên khoá Đúng hạn 3 tháng' },
+      { key: 'STANDARD_MONTHS', value: '3', category: 'ACADEMIC', description: 'Hạn chuẩn hoàn thành khoá học (tháng)' },
+      { key: 'MAX_MONTHS', value: '4', category: 'ACADEMIC', description: 'Hạn tối đa hoàn thành khoá học (tháng)' },
+      { key: 'MAX_RESERVATION_DAYS', value: '90', category: 'ACADEMIC', description: 'Thời gian bảo lưu tối đa (ngày)' },
+    ];
+    for (const c of defaultConfigs) {
+      await prisma.systemConfig.upsert({
+        where: { key: c.key },
+        update: { value: c.value, category: c.category, description: c.description },
+        create: c,
+      });
+    }
+    const configs = await prisma.systemConfig.findMany();
+    return res.json({ success: true, data: configs, message: 'Đã nạp 5 cấu hình chuẩn thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 4. Get Users / Teachers
 coreRouter.get('/users', async (req: Request, res: Response) => {
   try {

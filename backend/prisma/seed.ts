@@ -317,33 +317,43 @@ async function main() {
   }
 
   // 8. CRM: Leads
-  const lead1 = await prisma.lead.create({
-    data: {
-      branchId: branch.id,
-      parentName: 'Nguyễn Văn Minh',
-      parentPhone: '0988111222',
-      studentName: 'Nguyễn Minh Khang',
-      studentDob: new Date('2019-05-15'),
-      interestedSubject: 'Toán trí tuệ Soroban',
-      leadSource: 'Facebook Ads',
-      assignedUserId: saleUser.id,
-      status: LeadStatus.TRIAL_ATTENDED,
-    },
+  let lead1 = await prisma.lead.findFirst({
+    where: { parentPhone: '0988111222' },
   });
+  if (!lead1) {
+    lead1 = await prisma.lead.create({
+      data: {
+        branchId: branch.id,
+        parentName: 'Nguyễn Văn Minh',
+        parentPhone: '0988111222',
+        studentName: 'Nguyễn Minh Khang',
+        studentDob: new Date('2019-05-15'),
+        interestedSubject: 'Toán trí tuệ Soroban',
+        leadSource: 'Facebook Ads',
+        assignedUserId: saleUser.id,
+        status: LeadStatus.TRIAL_ATTENDED,
+      },
+    });
+  }
 
   // 9. Academic: Student & Enrollment
-  const student = await prisma.student.create({
-    data: {
-      studentCode: 'HV-2026-001',
-      branchId: branch.id,
-      fullName: 'Trần Gia Bảo',
-      dob: new Date('2019-03-20'),
-      gender: 'Nam',
-      parentName: 'Trần Thị Mai',
-      parentPhone: '0977333444',
-      status: 'ACTIVE',
-    },
+  let student = await prisma.student.findUnique({
+    where: { studentCode: 'HV-2026-001' },
   });
+  if (!student) {
+    student = await prisma.student.create({
+      data: {
+        studentCode: 'HV-2026-001',
+        branchId: branch.id,
+        fullName: 'Trần Gia Bảo',
+        dob: new Date('2019-03-20'),
+        gender: 'Nam',
+        parentName: 'Trần Thị Mai',
+        parentPhone: '0977333444',
+        status: 'ACTIVE',
+      },
+    });
+  }
 
   const activationDate = new Date('2026-10-01');
   const standardDeadline = new Date(activationDate);
@@ -351,45 +361,54 @@ async function main() {
   const maxExpiredDate = new Date(activationDate);
   maxExpiredDate.setMonth(maxExpiredDate.getMonth() + 4);
 
-  const enrollment = await prisma.enrollment.create({
-    data: {
-      studentId: student.id,
-      courseId: course1.id,
-      currentClassId: class1.id,
-      assignedTeacherId: teacherFulltime.id,
-      totalSessions: 24,
-      attendedSessions: 5,
-      makeupPendingSessions: 1,
-      remainingSessions: 18,
-      activationDate,
-      standardDeadlineDate: standardDeadline,
-      maxExpiredDate,
-      status: 'ACTIVE',
-    },
+  let enrollment = await prisma.enrollment.findFirst({
+    where: { studentId: student.id, courseId: course1.id },
   });
+  if (!enrollment) {
+    enrollment = await prisma.enrollment.create({
+      data: {
+        studentId: student.id,
+        courseId: course1.id,
+        currentClassId: class1.id,
+        assignedTeacherId: teacherFulltime.id,
+        totalSessions: 24,
+        attendedSessions: 5,
+        makeupPendingSessions: 1,
+        remainingSessions: 18,
+        activationDate,
+        standardDeadlineDate: standardDeadline,
+        maxExpiredDate,
+        status: 'ACTIVE',
+      },
+    });
+  }
 
   // Entry Test assessment for session 1
-  await prisma.studentAssessment.create({
-    data: {
-      enrollmentId: enrollment.id,
-      studentId: student.id,
-      teacherId: teacherFulltime.id,
-      testType: 'ENTRY_TEST',
-      sessionNumber: 1,
-      testDate: activationDate,
-      score: 8.5,
-      evaluationDetails: 'Học sinh tiếp thu tư duy số học nhanh, phản xạ bàn tính nhạy bén.',
-      isPassed: true,
-    },
+  const existingAssessment = await prisma.studentAssessment.findFirst({
+    where: { studentId: student.id, sessionNumber: 1 },
   });
+  if (!existingAssessment) {
+    await prisma.studentAssessment.create({
+      data: {
+        enrollmentId: enrollment.id,
+        studentId: student.id,
+        teacherId: teacherFulltime.id,
+        testType: 'ENTRY_TEST',
+        sessionNumber: 1,
+        testDate: activationDate,
+        score: 8.5,
+        evaluationDetails: 'Học sinh tiếp thu tư duy số học nhanh, phản xạ bàn tính nhạy bén.',
+        isPassed: true,
+      },
+    });
+  }
 
   console.log('✅ Seed completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error('Seed notice (continuing to start server):', e);
   })
   .finally(async () => {
     await prisma.$disconnect();

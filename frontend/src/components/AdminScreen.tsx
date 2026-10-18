@@ -705,9 +705,27 @@ export function AdminScreen() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                disabled={loading}
                 onClick={async () => {
                   try {
                     setLoading(true);
+                    // 1. Thử gọi API nạp hàng loạt (Batch Endpoint)
+                    try {
+                      const res = await fetch(`${API_BASE_URL}/api/core/configs/seed-defaults`, {
+                        method: 'POST',
+                      });
+                      const data = await res.json();
+                      if (data.success && data.data) {
+                        setConfigs(data.data);
+                        setMessage('Đã nạp 5 cấu hình chuẩn thành công!');
+                        return;
+                      }
+                    } catch (e) {
+                      // Fallback nếu API batch chưa cập nhật
+                    }
+
+                    // 2. Fallback nạp đồng thời (Promise.all)
                     const defaultConfigs = [
                       { key: 'NEW_STUDENT_BONUS', value: '200000', category: 'PAYROLL', description: 'Định mức thưởng Học viên Mới cho Giáo viên/Sale' },
                       { key: 'ON_TIME_LEVELUP_BONUS', value: '300000', category: 'PAYROLL', description: 'Định mức thưởng HV Lên khoá Đúng hạn 3 tháng' },
@@ -715,25 +733,29 @@ export function AdminScreen() {
                       { key: 'MAX_MONTHS', value: '4', category: 'ACADEMIC', description: 'Hạn tối đa hoàn thành khoá học (tháng)' },
                       { key: 'MAX_RESERVATION_DAYS', value: '90', category: 'ACADEMIC', description: 'Thời gian bảo lưu tối đa (ngày)' },
                     ];
-                    for (const c of defaultConfigs) {
-                      await fetch(`${API_BASE_URL}/api/core/configs/${c.key}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(c),
-                      });
-                    }
+                    await Promise.all(
+                      defaultConfigs.map((c) =>
+                        fetch(`${API_BASE_URL}/api/core/configs/${c.key}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(c),
+                        })
+                      )
+                    );
                     setMessage('Đã khởi tạo bộ 5 tham số cấu hình mặc định thành công!');
                     await fetchData();
                   } catch (e: any) {
-                    alert(e.message);
+                    alert(`Lỗi khi nạp cấu hình: ${e.message}`);
                   } finally {
                     setLoading(false);
                   }
                 }}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                className={`px-3 py-1.5 rounded-lg text-white font-semibold text-xs flex items-center gap-1.5 transition ${
+                  loading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer shadow-sm'
+                }`}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Nạp 5 Cấu Hình Chuẩn</span>
+                {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <span>{loading ? 'Đang Nạp Dữ Liệu...' : 'Nạp 5 Cấu Hình Chuẩn'}</span>
               </button>
             </div>
           </div>
