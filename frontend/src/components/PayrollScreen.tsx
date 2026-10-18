@@ -159,21 +159,21 @@ export const PayrollScreen: React.FC = () => {
         </div>
       )}
 
-      {/* NỬA TRÊN - DANH SÁCH TỔNG HỢP LƯƠNG TOÀN BỘ GIÁO VIÊN */}
+      {/* NỬA TRÊN - DANH SÁCH TỔNG HỢP LƯƠNG TOÀN BỘ NHÂN SỰ */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-            Danh Sách Tổng Hợp Lương Giáo Viên Tháng {month}/{year}
+            Danh Sách Bảng Lương Nhân Sự & Giáo Viên Tháng {month}/{year}
           </h2>
-          <span className="text-xs text-slate-500">{payrolls.length} giáo viên</span>
+          <span className="text-xs text-slate-500">{payrolls.length} nhân sự</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-600 text-xs font-semibold uppercase">
               <tr>
-                <th className="p-3">Giáo Viên</th>
+                <th className="p-3">Nhân Sự & Vai Trò</th>
                 <th className="p-3">Hợp Đồng</th>
-                <th className="p-3">Giờ Dạy (GPS)</th>
+                <th className="p-3">Giờ Dạy / Công</th>
                 <th className="p-3">Lương Giờ Công</th>
                 <th className="p-3">Thưởng KPI</th>
                 <th className="p-3">Phụ Cấp</th>
@@ -195,7 +195,34 @@ export const PayrollScreen: React.FC = () => {
                     }`}
                   >
                     <td className="p-3">
-                      <div className="font-semibold text-slate-800">{p.user?.fullName}</div>
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                        <span>{p.user?.fullName}</span>
+                        {p.user?.role === 'ADMIN' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                            Quản lý
+                          </span>
+                        )}
+                        {p.user?.role === 'ACADEMIC_AFFAIRS' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            Giáo vụ
+                          </span>
+                        )}
+                        {p.user?.role === 'ACCOUNTANT' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Kế toán
+                          </span>
+                        )}
+                        {p.user?.role === 'SALE' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Sale
+                          </span>
+                        )}
+                        {p.user?.role === 'TEACHER' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            Giáo viên
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500">{p.user?.phone}</div>
                     </td>
                     <td className="p-3">
@@ -209,10 +236,12 @@ export const PayrollScreen: React.FC = () => {
                         {p.contractTypeSnapshot}
                       </span>
                     </td>
-                    <td className="p-3 font-medium text-slate-700">{p.totalTeachingHours}h</td>
+                    <td className="p-3 font-medium text-slate-700">
+                      {Number(p.totalTeachingHours) > 0 ? `${p.totalTeachingHours}h dạy` : `${p.totalAdminHours || 160}h HC`}
+                    </td>
                     <td className="p-3">{Number(p.workingSalaryAmount).toLocaleString('vi-VN')} đ</td>
                     <td className="p-3 text-emerald-600 font-medium">+{totalKpi.toLocaleString('vi-VN')} đ</td>
-                    <td className="p-3">+{Number(p.totalOptionalAllowances).toLocaleString('vi-VN')} đ</td>
+                    <td className="p-3 text-indigo-700 font-bold">+{Number(p.totalOptionalAllowances).toLocaleString('vi-VN')} đ</td>
                     <td className="p-3 font-bold text-base text-blue-700">
                       {Number(p.netSalary).toLocaleString('vi-VN')} đ
                     </td>
