@@ -474,6 +474,62 @@ export function AdminScreen() {
               Thêm Cơ Sở Đào Tạo Mới
             </h2>
 
+            {/* Google Maps Link / Coordinate Helper */}
+            <div className="mb-4 p-3 rounded-xl bg-blue-50 border border-blue-200">
+              <div className="text-[11px] font-bold text-blue-900 flex items-center gap-1.5 mb-1.5">
+                <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                Lấy Tọa Độ Chuẩn Từ Google Maps:
+              </div>
+              <p className="text-[10px] text-blue-700 mb-2 leading-relaxed">
+                Dán đường link Google Maps hoặc chuỗi tọa độ (ví dụ: <code className="bg-white px-1 py-0.5 rounded font-mono">21.033333, 105.799999</code>) vào ô dưới đây để hệ thống tự động trích xuất:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Dán link hoặc tọa độ Google Maps vào đây..."
+                  onChange={(e) => {
+                    const text = e.target.value.trim();
+                    // Match coordinates like 21.033333, 105.799999 or @21.033333,105.799999
+                    const match = text.match(/@?(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || text.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (match) {
+                      setNewBranch((prev) => ({
+                        ...prev,
+                        gpsLatitude: parseFloat(match[1]),
+                        gpsLongitude: parseFloat(match[2]),
+                      }));
+                      setMessage(`Đã nhận diện tọa độ Google Maps: Lat ${match[1]}, Lng ${match[2]}`);
+                    }
+                  }}
+                  className="flex-1 px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-blue-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          setNewBranch((prev) => ({
+                            ...prev,
+                            gpsLatitude: pos.coords.latitude,
+                            gpsLongitude: pos.coords.longitude,
+                          }));
+                          setMessage(`Đã lấy vị trí thực tế tại thiết bị: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`);
+                        },
+                        (err) => alert(`Không thể lấy vị trí GPS: ${err.message}`)
+                      );
+                    } else {
+                      alert('Trình duyệt không hỗ trợ Geolocation');
+                    }
+                  }}
+                  title="Lấy vị trí GPS hiện tại của máy tính/điện thoại đang đứng"
+                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <MapPin className="w-3 h-3" />
+                  <span>Vị trí hiện tại</span>
+                </button>
+              </div>
+            </div>
+
             <form onSubmit={handleCreateBranch} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Mã Cơ Sở</label>
@@ -513,34 +569,62 @@ export function AdminScreen() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Vĩ Độ (Lat)</label>
+                  <label className="block font-medium text-slate-700 mb-1">Vĩ Độ (Latitude)</label>
                   <input
                     type="number"
                     step="0.000001"
+                    required
                     value={newBranch.gpsLatitude}
                     onChange={(e) => setNewBranch({ ...newBranch, gpsLatitude: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-800"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-800 font-mono font-bold text-indigo-700"
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Kinh Độ (Lng)</label>
+                  <label className="block font-medium text-slate-700 mb-1">Kinh Độ (Longitude)</label>
                   <input
                     type="number"
                     step="0.000001"
+                    required
                     value={newBranch.gpsLongitude}
                     onChange={(e) => setNewBranch({ ...newBranch, gpsLongitude: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-800"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-800 font-mono font-bold text-indigo-700"
                   />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow transition cursor-pointer mt-2"
-              >
-                Thêm Cơ Sở
-              </button>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Bán Kính Chấm Công Cho Phép (Mét)</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="1000"
+                  required
+                  value={newBranch.gpsRadiusMeters}
+                  onChange={(e) => setNewBranch({ ...newBranch, gpsRadiusMeters: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-800"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Khuyên dùng: 150m - 200m để đảm bảo giáo viên có mặt đúng tại phòng học</span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${newBranch.gpsLatitude},${newBranch.gpsLongitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  <MapPin className="w-3 h-3" />
+                  Kiểm tra vị trí trên Google Maps ↗
+                </a>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow transition cursor-pointer"
+                >
+                  Lưu Cơ Sở Mới
+                </button>
+              </div>
             </form>
           </div>
         </div>
