@@ -195,16 +195,16 @@ export const ReceiptVerificationScreen: React.FC = () => {
   const countPending = installments.filter((i) => i.status !== 'PAID' && !i.isProvisionallyApproved).length;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center border-b pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <FileCheck className="w-7 h-7 text-emerald-600" />
-            Quy Trình Kiểm Tra Tự Động, Hạch Toán Tạm & Duyệt Tiền Nổi
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <FileCheck className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-600" />
+            Kiểm Tra Tự Động, Hạch Toán Tạm & Duyệt Phiếu Thu
           </h1>
-          <p className="text-slate-500 text-sm">
-            Tự động đối soát bill $\rightarrow$ <strong>Hạch toán tạm cho học viên vào lớp ngay</strong> $\rightarrow$ Kế toán xác nhận tiền vào TK để hoàn tất chính thức
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">
+            Quy trình: Tự động đối soát bill → <strong>Hạch toán tạm cho học viên vào lớp ngay</strong> → Kế toán xác nhận tiền nổi để hoàn tất chứng từ
           </p>
         </div>
         <button

@@ -184,8 +184,11 @@ export function App() {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all cursor-pointer ${
-                    isActive ? `${tab.colorClass} shadow-sm` : tab.inactiveColorClass
+                  style={{
+                    backgroundColor: isActive ? branding.systemPrimaryColor : undefined,
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all cursor-pointer font-semibold ${
+                    isActive ? 'text-white shadow-md' : tab.inactiveColorClass
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
