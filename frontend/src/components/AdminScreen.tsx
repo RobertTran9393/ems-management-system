@@ -29,8 +29,17 @@ import {
   Calculator,
   CheckSquare,
   Square,
-  AlertCircle
+  AlertCircle,
+  Palette,
+  Image,
+  Type,
+  Upload,
+  Eye,
+  Undo2,
+  LayoutTemplate,
+  Check
 } from 'lucide-react';
+import { useBranding } from '../context/BrandingContext';
 
 const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: string; placeholderKey: string }> = {
   PAYROLL: {
@@ -59,8 +68,54 @@ const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: str
   },
 };
 
+const THEME_PRESETS = [
+  {
+    id: 'indigo',
+    name: 'Indigo Hoàng Gia',
+    primary: '#4f46e5',
+    accent: '#6366f1',
+    desc: 'Hiện đại, chuyên nghiệp & chuẩn mực giáo dục',
+  },
+  {
+    id: 'blue',
+    name: 'Xanh Dương Đại Dương',
+    primary: '#2563eb',
+    accent: '#3b82f6',
+    desc: 'Tin cậy, chuẩn mực & công nghệ số',
+  },
+  {
+    id: 'violet',
+    name: 'Tím Violet Sáng Tạo',
+    primary: '#7c3aed',
+    accent: '#8b5cf6',
+    desc: 'Kích thích tư duy logic & toán trí tuệ',
+  },
+  {
+    id: 'emerald',
+    name: 'Xanh Ngọc Tươi Sáng',
+    primary: '#059669',
+    accent: '#10b981',
+    desc: 'Tươi mới, phát triển bền vững & kỹ năng sống',
+  },
+  {
+    id: 'rose',
+    name: 'Đỏ San Hô Năng Động',
+    primary: '#e11d48',
+    accent: '#f43f5e',
+    desc: 'Nhiệt huyết, truyền cảm hứng & tự tin tỏa sáng',
+  },
+  {
+    id: 'amber',
+    name: 'Cam Hổ Phách Nhiệt Tình',
+    primary: '#ea580c',
+    accent: '#f97316',
+    desc: 'Ấm áp, thân thiện & tràn đầy năng lượng',
+  },
+];
+
 export function AdminScreen() {
-  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'COURSES' | 'PRODUCTS' | 'CONFIGS'>('OVERVIEW');
+  const { branding, updateBranding, resetBranding } = useBranding();
+  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'COURSES' | 'PRODUCTS' | 'CONFIGS' | 'BRANDING'>('OVERVIEW');
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -71,6 +126,78 @@ export function AdminScreen() {
   const [configFilter, setConfigFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Form state for branding customization
+  const [brandingForm, setBrandingForm] = useState({
+    systemName: branding.systemName,
+    systemSlogan: branding.systemSlogan,
+    systemLogoUrl: branding.systemLogoUrl,
+    systemLogoText: branding.systemLogoText,
+    systemPrimaryColor: branding.systemPrimaryColor,
+    systemAccentColor: branding.systemAccentColor,
+  });
+
+  useEffect(() => {
+    setBrandingForm({
+      systemName: branding.systemName,
+      systemSlogan: branding.systemSlogan,
+      systemLogoUrl: branding.systemLogoUrl,
+      systemLogoText: branding.systemLogoText,
+      systemPrimaryColor: branding.systemPrimaryColor,
+      systemAccentColor: branding.systemAccentColor,
+    });
+  }, [branding]);
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Kích thước ảnh tối đa 2MB!');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setBrandingForm((prev) => ({ ...prev, systemLogoUrl: base64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveBranding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandingForm.systemName.trim()) {
+      alert('Vui lòng nhập Tên Hệ Thống!');
+      return;
+    }
+    try {
+      setLoading(true);
+      const ok = await updateBranding(brandingForm);
+      if (ok) {
+        setMessage('Đã cập nhật giao diện, tên hệ thống, logo & màu sắc thành công!');
+      } else {
+        alert('Lỗi khi lưu giao diện');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetToDefaultBranding = async () => {
+    if (!confirm('Bạn có chắc muốn khôi phục giao diện hệ thống về mặc định ban đầu?')) return;
+    try {
+      setLoading(true);
+      const ok = await resetBranding();
+      if (ok) {
+        setMessage('Đã khôi phục giao diện hệ thống về mặc định!');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Form states for creating user
   const [newUser, setNewUser] = useState({
@@ -646,6 +773,18 @@ export function AdminScreen() {
         >
           <Sliders className="w-3.5 h-3.5" />
           <span>Tham Số & KPI ({configs.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('BRANDING')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            activeSubTab === 'BRANDING'
+              ? 'bg-indigo-600 text-white shadow'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          <span>Giao Diện & Thương Hiệu</span>
         </button>
       </div>
 
@@ -2212,6 +2351,445 @@ export function AdminScreen() {
                 })
             )}
           </div>
+        </div>
+      )}
+
+      {/* Subtab: Branding & System Interface Customization */}
+      {activeSubTab === 'BRANDING' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl shadow-lg border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Palette className="w-5 h-5 text-indigo-400" />
+                <h2 className="text-base font-bold text-white">Chỉnh Sửa Giao Diện, Logo & Thương Hiệu Hệ Thống</h2>
+              </div>
+              <p className="text-xs text-slate-300">
+                Tùy biến tên trung tâm, khẩu hiệu đào tạo, hình ảnh logo và bộ màu chủ đạo hiển thị trên toàn bộ Navbar, Màn hình đăng nhập & Báo cáo
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleResetToDefaultBranding}
+                disabled={loading}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>Khôi Phục Mặc Định</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Form & Live Preview Grid */}
+          <form onSubmit={handleSaveBranding} className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
+            {/* CỘT TRÁI (7/12): CÁC Ô CẤU HÌNH GIAO DIỆN */}
+            <div className="lg:col-span-7 space-y-5">
+              {/* Card 1: Tên Hệ Thống & Slogan */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <Type className="w-4 h-4 text-indigo-600" />
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    1. Tên Hệ Thống & Khẩu Hiệu Trung Tâm
+                  </h3>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Tên Hệ Thống Hiển Thị (Brand Name)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={brandingForm.systemName}
+                    onChange={(e) => setBrandingForm({ ...brandingForm, systemName: e.target.value })}
+                    placeholder="VD: EMS SBR, Soroban Math Academy..."
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-bold text-slate-900 focus:outline-none focus:border-indigo-600 text-sm shadow-sm"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Tên này sẽ xuất hiện trên thanh Navbar góc trái, tiêu đề tab trình duyệt, màn hình đăng nhập và chân trang.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Khẩu Hiệu Đào Tạo (Slogan / Subtitle)
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.systemSlogan}
+                    onChange={(e) => setBrandingForm({ ...brandingForm, systemSlogan: e.target.value })}
+                    placeholder="VD: Toán Trí Tuệ & Kỹ Năng Sống • Nuôi Dưỡng Tương Lai"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-medium text-slate-800 focus:outline-none focus:border-indigo-600 text-xs shadow-sm"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Dòng phụ đề nằm ngay dưới tên thương hiệu trên thanh Menu và màn hình Đăng nhập.
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: Cấu Hình Logo Hệ Thống */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      2. Cấu Hình Biểu Tượng & Logo Hệ Thống
+                    </h3>
+                  </div>
+                  {brandingForm.systemLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setBrandingForm({ ...brandingForm, systemLogoUrl: '' })}
+                      className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline"
+                    >
+                      Xóa ảnh (dùng huy hiệu chữ)
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Option A: Image Logo */}
+                  <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="font-bold text-[11px] text-slate-800 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Cách A: Dùng Ảnh Logo (.PNG, .SVG, .JPG)</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-1">
+                        Tải ảnh từ máy tính:
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={handleLogoFileUpload}
+                        className="w-full text-[11px] text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-1">
+                        Hoặc dán đường dẫn ảnh trực tuyến (URL):
+                      </label>
+                      <input
+                        type="url"
+                        value={brandingForm.systemLogoUrl}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, systemLogoUrl: e.target.value })}
+                        placeholder="https://domain.com/logo.png"
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:border-indigo-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Option B: Badge Text Logo */}
+                  <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="font-bold text-[11px] text-slate-800 flex items-center gap-1.5">
+                      <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Cách B: Dùng Huy Hiệu Ký Tự Viết Tắt</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-1">
+                        Ký tự trên huy hiệu (1 - 5 chữ cái):
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={5}
+                        value={brandingForm.systemLogoText}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, systemLogoText: e.target.value.toUpperCase() })}
+                        placeholder="VD: SBR, EMS, MATH..."
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-black font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 text-indigo-700"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        Tự động hiển thị nổi bật theo dải màu chuyển sắc gradient nếu chưa có ảnh logo.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Màu Sắc Chủ Đạo (Theme Color) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      3. Màu Sắc Chủ Đạo & Giao Diện (Theme Color)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">
+                    Primary: {brandingForm.systemPrimaryColor}
+                  </span>
+                </div>
+
+                {/* Preset Palettes */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-2">
+                    Chọn nhanh bộ phối màu thương hiệu (Theme Presets):
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {THEME_PRESETS.map((preset) => {
+                      const isSelected =
+                        brandingForm.systemPrimaryColor.toLowerCase() === preset.primary.toLowerCase();
+                      return (
+                        <div
+                          key={preset.id}
+                          onClick={() =>
+                            setBrandingForm({
+                              ...brandingForm,
+                              systemPrimaryColor: preset.primary,
+                              systemAccentColor: preset.accent,
+                            })
+                          }
+                          className={`p-3 rounded-xl border-2 cursor-pointer transition flex items-start gap-2.5 ${
+                            isSelected
+                              ? 'border-indigo-600 bg-indigo-50/50 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center -space-x-1 shrink-0 pt-0.5">
+                            <span
+                              className="w-5 h-5 rounded-full shadow-sm border border-white"
+                              style={{ backgroundColor: preset.primary }}
+                            />
+                            <span
+                              className="w-4 h-4 rounded-full shadow-sm border border-white"
+                              style={{ backgroundColor: preset.accent }}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-800 text-[11px] truncate flex items-center gap-1">
+                              <span>{preset.name}</span>
+                              {isSelected && <Check className="w-3 h-3 text-indigo-600 shrink-0" />}
+                            </div>
+                            <div className="text-[10px] text-slate-500 line-clamp-1">{preset.desc}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Color Pickers */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-2">
+                    Hoặc tùy chỉnh mã màu tùy ý (Custom Hex):
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+                      <input
+                        type="color"
+                        value={brandingForm.systemPrimaryColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, systemPrimaryColor: e.target.value })}
+                        className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-[10px] font-semibold text-slate-500">Màu Chủ Đạo (Primary):</span>
+                        <input
+                          type="text"
+                          value={brandingForm.systemPrimaryColor}
+                          onChange={(e) => setBrandingForm({ ...brandingForm, systemPrimaryColor: e.target.value })}
+                          className="font-mono font-bold text-xs text-slate-800 w-full focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+                      <input
+                        type="color"
+                        value={brandingForm.systemAccentColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, systemAccentColor: e.target.value })}
+                        className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-[10px] font-semibold text-slate-500">Màu Phụ Trợ (Accent):</span>
+                        <input
+                          type="text"
+                          value={brandingForm.systemAccentColor}
+                          onChange={(e) => setBrandingForm({ ...brandingForm, systemAccentColor: e.target.value })}
+                          className="font-mono font-bold text-xs text-slate-800 w-full focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 rounded-xl text-white font-bold text-xs flex items-center gap-2 shadow-lg transition cursor-pointer hover:opacity-95"
+                  style={{
+                    background: `linear-gradient(135deg, ${brandingForm.systemPrimaryColor}, ${brandingForm.systemAccentColor})`,
+                  }}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{loading ? 'Đang lưu...' : 'Lưu & Áp Dụng Thay Đổi Giao Diện Ngay'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* CỘT PHẢI (5/12): XEM TRƯỚC TRỰC QUAN THỜI GIAN THỰC (LIVE PREVIEWS) */}
+            <div className="lg:col-span-5 space-y-5">
+              {/* Card Xem Trước Navbar */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Mô Phỏng Thanh Menu (Navbar Preview)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Trực tiếp
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Cách thương hiệu xuất hiện trên thanh điều hướng đầu trang của toàn bộ nhân viên:
+                </p>
+
+                {/* Simulated Header */}
+                <div className="bg-slate-900 rounded-xl p-3 border border-slate-800 text-white shadow-inner">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {brandingForm.systemLogoUrl ? (
+                        <div className="w-8 h-8 rounded-lg bg-white/10 p-0.5 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img
+                            src={brandingForm.systemLogoUrl}
+                            alt="Logo preview"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-xs shadow shrink-0"
+                          style={{
+                            background: `linear-gradient(135deg, ${brandingForm.systemPrimaryColor}, ${brandingForm.systemAccentColor})`,
+                          }}
+                        >
+                          {brandingForm.systemLogoText || 'EMS'}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-white truncate flex items-center gap-1.5">
+                          <span>{brandingForm.systemName || 'Tên hệ thống'}</span>
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-white/20 text-indigo-200 font-semibold">
+                            v2.0
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {brandingForm.systemSlogan || 'Khẩu hiệu đào tạo'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span
+                        className="px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-sm"
+                        style={{ backgroundColor: brandingForm.systemPrimaryColor }}
+                      >
+                        Quản Trị
+                      </span>
+                      <span className="px-2 py-1 rounded-md text-[10px] font-medium text-slate-300 bg-slate-800">
+                        POS
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Xem Trước Màn Hình Đăng Nhập */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <LayoutTemplate className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Mô Phỏng Trang Đăng Nhập (Login Card)
+                    </h3>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Giao diện trang chào mừng nhân viên và giáo viên khi truy cập hệ thống:
+                </p>
+
+                {/* Simulated Login Card */}
+                <div className="bg-slate-900 rounded-xl p-5 border border-slate-800 text-white text-center shadow-inner space-y-3">
+                  <div className="flex justify-center">
+                    {brandingForm.systemLogoUrl ? (
+                      <div className="w-14 h-14 rounded-2xl bg-white/10 p-1 border border-white/20 flex items-center justify-center shadow-lg overflow-hidden">
+                        <img
+                          src={brandingForm.systemLogoUrl}
+                          alt="Logo login preview"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white text-2xl shadow-lg"
+                        style={{
+                          background: `linear-gradient(135deg, ${brandingForm.systemPrimaryColor}, ${brandingForm.systemAccentColor})`,
+                        }}
+                      >
+                        {brandingForm.systemLogoText || 'EMS'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="font-bold text-sm text-white">{brandingForm.systemName || 'Tên hệ thống'}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{brandingForm.systemSlogan}</div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1 text-left">
+                    <div className="h-7 bg-slate-800 rounded-lg border border-slate-700 px-2.5 flex items-center text-[10px] text-slate-400">
+                      email@domain.com
+                    </div>
+                    <div className="h-7 bg-slate-800 rounded-lg border border-slate-700 px-2.5 flex items-center text-[10px] text-slate-400">
+                      ••••••••
+                    </div>
+                    <div
+                      className="h-8 rounded-lg flex items-center justify-center font-bold text-[11px] text-white shadow-md mt-2"
+                      style={{
+                        background: `linear-gradient(135deg, ${brandingForm.systemPrimaryColor}, ${brandingForm.systemAccentColor})`,
+                      }}
+                    >
+                      Đăng Nhập
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Thông số màu sắc & Token nhận diện */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-100 text-slate-700 space-y-2">
+                <div className="font-bold text-xs text-indigo-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Thông Số Kỹ Thuật Đang Áp Dụng:</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                    <span className="text-slate-400 block text-[10px]">Màu Primary:</span>
+                    <span className="font-mono font-bold text-indigo-900">{brandingForm.systemPrimaryColor}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                    <span className="text-slate-400 block text-[10px]">Màu Accent:</span>
+                    <span className="font-mono font-bold text-indigo-900">{brandingForm.systemAccentColor}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-indigo-100 col-span-2">
+                    <span className="text-slate-400 block text-[10px]">Định dạng Logo:</span>
+                    <span className="font-semibold text-slate-800">
+                      {brandingForm.systemLogoUrl ? 'Ảnh tuỳ chỉnh (Custom Graphic/Image)' : `Huy hiệu chữ (${brandingForm.systemLogoText || 'EMS'})`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
         </div>
       )}
     </div>

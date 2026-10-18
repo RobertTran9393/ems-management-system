@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { Lock, Mail, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { useBranding } from '../context/BrandingContext';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: any, token: string) => void;
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
+  const { branding } = useBranding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,11 +57,26 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       <div className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-6 sm:p-8">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 items-center justify-center font-black text-white text-3xl shadow-xl shadow-blue-500/20 mb-3">
-            SBR
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">HỆ THỐNG QUẢN LÝ EMS</h1>
-          <p className="text-xs text-slate-400 mt-1">Toán Trí Tuệ & Kỹ Năng Sống • SRS v2.0</p>
+          {branding.systemLogoUrl ? (
+            <div className="inline-flex w-16 h-16 rounded-2xl bg-white/10 p-1 border border-white/20 items-center justify-center shadow-xl mb-3 overflow-hidden">
+              <img
+                src={branding.systemLogoUrl}
+                alt={branding.systemName}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div
+              className="inline-flex w-16 h-16 rounded-2xl items-center justify-center font-black text-white text-3xl shadow-xl mb-3"
+              style={{
+                background: `linear-gradient(135deg, ${branding.systemPrimaryColor}, ${branding.systemAccentColor})`,
+              }}
+            >
+              {branding.systemLogoText || 'EMS'}
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-white tracking-tight">{branding.systemName}</h1>
+          <p className="text-xs text-slate-400 mt-1">{branding.systemSlogan}</p>
         </div>
 
         {/* Error Alert */}

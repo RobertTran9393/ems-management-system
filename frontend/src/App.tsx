@@ -8,8 +8,10 @@ import { CrmScreen } from './components/CrmScreen';
 import { AdminScreen } from './components/AdminScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut } from 'lucide-react';
+import { useBranding } from './context/BrandingContext';
 
 export function App() {
+  const { branding } = useBranding();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
@@ -78,17 +80,34 @@ export function App() {
         <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16 gap-3">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-900/30">
-              SBR
-            </div>
+            {branding.systemLogoUrl ? (
+              <div className="w-9 h-9 rounded-xl bg-white/10 p-1 border border-white/20 flex items-center justify-center shadow-md overflow-hidden">
+                <img
+                  src={branding.systemLogoUrl}
+                  alt={branding.systemName}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-900/30"
+                style={{
+                  background: `linear-gradient(135deg, ${branding.systemPrimaryColor}, ${branding.systemAccentColor})`,
+                }}
+              >
+                {branding.systemLogoText || 'EMS'}
+              </div>
+            )}
             <div>
               <div className="font-bold text-sm tracking-tight text-white flex items-center gap-2">
-                <span>EMS SBR</span>
+                <span>{branding.systemName}</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-400/20">
                   v2.0
                 </span>
               </div>
-              <div className="text-[11px] text-slate-400 hidden xl:block leading-tight">Toán Trí Tuệ & Kỹ Năng Sống</div>
+              <div className="text-[11px] text-slate-400 hidden xl:block leading-tight">
+                {branding.systemSlogan}
+              </div>
             </div>
           </div>
 
@@ -227,7 +246,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-500">
-        Hệ Thống Quản Lý Nội Bộ & Đào Tạo Trung Tâm Toán Trí Tuệ và Kỹ Năng Sống (ERP & CRM v2.0) • Đang đăng nhập: {currentUser.fullName} ({roleNameMap[currentUser.role] || currentUser.role})
+        {branding.systemName} • {branding.systemSlogan} • Đang đăng nhập: {currentUser.fullName} ({roleNameMap[currentUser.role] || currentUser.role})
       </footer>
     </div>
   );

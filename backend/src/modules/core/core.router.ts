@@ -100,6 +100,77 @@ coreRouter.post('/configs/seed-defaults', async (req: Request, res: Response) =>
   }
 });
 
+// 3.2 Get System Branding & Appearance
+coreRouter.get('/branding', async (req: Request, res: Response) => {
+  try {
+    const brandingKeys = [
+      'SYSTEM_NAME',
+      'SYSTEM_SLOGAN',
+      'SYSTEM_LOGO_URL',
+      'SYSTEM_LOGO_TEXT',
+      'SYSTEM_PRIMARY_COLOR',
+      'SYSTEM_ACCENT_COLOR',
+    ];
+    const configs = await prisma.systemConfig.findMany({
+      where: { key: { in: brandingKeys } },
+    });
+    const result: Record<string, string> = {
+      systemName: 'EMS SBR',
+      systemSlogan: 'Toán Trí Tuệ & Kỹ Năng Sống • SRS v2.0',
+      systemLogoUrl: '',
+      systemLogoText: 'SBR',
+      systemPrimaryColor: '#4f46e5',
+      systemAccentColor: '#2563eb',
+    };
+    configs.forEach((c) => {
+      if (c.key === 'SYSTEM_NAME') result.systemName = c.value;
+      if (c.key === 'SYSTEM_SLOGAN') result.systemSlogan = c.value;
+      if (c.key === 'SYSTEM_LOGO_URL') result.systemLogoUrl = c.value;
+      if (c.key === 'SYSTEM_LOGO_TEXT') result.systemLogoText = c.value;
+      if (c.key === 'SYSTEM_PRIMARY_COLOR') result.systemPrimaryColor = c.value;
+      if (c.key === 'SYSTEM_ACCENT_COLOR') result.systemAccentColor = c.value;
+    });
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 3.3 Update System Branding & Appearance
+coreRouter.put('/branding', async (req: Request, res: Response) => {
+  try {
+    const {
+      systemName,
+      systemSlogan,
+      systemLogoUrl,
+      systemLogoText,
+      systemPrimaryColor,
+      systemAccentColor,
+    } = req.body;
+
+    const items = [
+      { key: 'SYSTEM_NAME', value: systemName !== undefined ? String(systemName) : 'EMS SBR', desc: 'Tên hệ thống trung tâm' },
+      { key: 'SYSTEM_SLOGAN', value: systemSlogan !== undefined ? String(systemSlogan) : '', desc: 'Khẩu hiệu hệ thống' },
+      { key: 'SYSTEM_LOGO_URL', value: systemLogoUrl !== undefined ? String(systemLogoUrl) : '', desc: 'URL logo hình ảnh' },
+      { key: 'SYSTEM_LOGO_TEXT', value: systemLogoText !== undefined ? String(systemLogoText) : 'SBR', desc: 'Chữ viết tắt hiển thị trên logo huy hiệu' },
+      { key: 'SYSTEM_PRIMARY_COLOR', value: systemPrimaryColor !== undefined ? String(systemPrimaryColor) : '#4f46e5', desc: 'Màu sắc chủ đạo giao diện' },
+      { key: 'SYSTEM_ACCENT_COLOR', value: systemAccentColor !== undefined ? String(systemAccentColor) : '#2563eb', desc: 'Màu phụ trợ giao diện' },
+    ];
+
+    for (const item of items) {
+      await prisma.systemConfig.upsert({
+        where: { key: item.key },
+        update: { value: item.value, description: item.desc, category: 'BRANDING' },
+        create: { key: item.key, value: item.value, description: item.desc, category: 'BRANDING' },
+      });
+    }
+
+    return res.json({ success: true, message: 'Cập nhật giao diện & thương hiệu hệ thống thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 4. Get Users / Teachers
 coreRouter.get('/users', async (req: Request, res: Response) => {
   try {
