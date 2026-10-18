@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
-import { PayrollStatus, ContractType, AllowanceType } from '@prisma/client';
+import { PayrollStatus, ContractType, AllowanceType, EnrollmentStatus } from '@prisma/client';
 
 export const payrollRouter = Router();
 
@@ -54,7 +54,7 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
       where: {
         OR: [
           { category: 'PAYROLL' },
-          { key: { in: ['NEW_STUDENT_BONUS', 'ON_TIME_LEVELUP_BONUS'] } },
+          { key: { in: ['NEW_STUDENT_BONUS', 'ON_TIME_LEVELUP_BONUS', 'QUAN_LY_BE'] } },
         ],
       },
     });
@@ -240,12 +240,66 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
         }
       }
 
-      // b. Tự Động Áp Dụng Phụ Cấp Từ SystemConfig (VD: PHUCAP_QUANLY, PHUCAP_GIAOVU...)
+      // b. Tự Động Áp Dụng Phụ Cấp Từ SystemConfig (VD: PHUCAP_QUANLY, PHUCAP_GIAOVU, QUAN_LY_BE...)
       for (const cfg of payrollConfigs) {
         const keyUpper = cfg.key.toUpperCase();
-        if (keyUpper.startsWith('PHUCAP_') || keyUpper.startsWith('ALLOWANCE_') || keyUpper.includes('PHUCAP')) {
-          const amount = Number(cfg.value) || 0;
-          if (amount <= 0) continue;
+        const cfgValue = Number(cfg.value) || 0;
+        if (cfgValue <= 0) continue;
+
+        // 1. Phụ cấp quản lý học viên / bé theo quy mô sĩ số thực tế (QUAN_LY_BE):
+        // Mỗi bé đang học tại lớp giáo viên đó phụ trách sẽ được cộng thêm tiền phụ cấp (ví dụ: 4.000 đ/bé)
+        if (
+          staff.role === 'TEACHER' &&
+          (keyUpper === 'QUAN_LY_BE' || keyUpper.includes('QUANLY_BE') || keyUpper.includes('QUAN_LY_BE') || keyUpper.includes('CARE_BE'))
+        ) {
+          const activeEnrollments = await prisma.enrollment.findMany({
+            where: {
+              status: EnrollmentStatus.ACTIVE,
+              OR: [
+                { assignedTeacherId: staff.id },
+                { currentClass: { mainTeacherId: staff.id } },
+                {
+                  attendances: {
+                    some: {
+                      classSession: {
+                        teacherId: staff.id,
+                        sessionDate: {
+                          gte: new Date(y, m - 1, 1),
+                          lt: new Date(y, m, 1),
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+            select: { studentId: true },
+          });
+
+          const uniqueActiveStudentCount = new Set(activeEnrollments.map((e) => e.studentId)).size;
+          const calculatedAllowance = uniqueActiveStudentCount * cfgValue;
+
+          if (calculatedAllowance > 0) {
+            totalAllowances += calculatedAllowance;
+            allowanceItems.push({
+              allowanceConfigId: null,
+              title: `${cfg.description || 'Phụ cấp quản lý bé'} (${uniqueActiveStudentCount} bé × ${cfgValue.toLocaleString('vi-VN')} đ)`,
+              amount: calculatedAllowance,
+              isDeduction: false,
+              note: `Tự động: ${uniqueActiveStudentCount} bé đang học × ${cfgValue.toLocaleString('vi-VN')} đ/bé`,
+            });
+          }
+          continue;
+        }
+
+        // 2. Các loại phụ cấp chức vụ / chức danh cố định
+        if (
+          keyUpper.startsWith('PHUCAP_') ||
+          keyUpper.startsWith('ALLOWANCE_') ||
+          keyUpper.includes('PHUCAP') ||
+          keyUpper.includes('TRO_CAP')
+        ) {
+          const amount = cfgValue;
 
           let isApplicable = false;
 
