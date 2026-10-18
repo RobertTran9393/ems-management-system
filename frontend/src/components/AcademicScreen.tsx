@@ -13,6 +13,7 @@ export const AcademicScreen: React.FC = () => {
   const [reserveEndDate, setReserveEndDate] = useState('2026-11-20');
   const [reserveReason, setReserveReason] = useState('Học viên bận thi học kỳ ở trường');
 
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -21,15 +22,21 @@ export const AcademicScreen: React.FC = () => {
 
   const fetchEnrollments = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/academic/enrollments`);
       const data = await res.json();
       if (data.success && data.data.length > 0) {
         setEnrollments(data.data);
         setSelectedEnrollmentId(data.data[0].id);
         fetchDetail(data.data[0].id);
+      } else {
+        setEnrollments([]);
+        setEnrollmentDetail(null);
       }
     } catch (e: any) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -110,8 +117,36 @@ export const AcademicScreen: React.FC = () => {
     }
   };
 
-  if (!enrollmentDetail) {
-    return <div className="p-8 text-center text-slate-500">Đang tải dữ liệu hồ sơ đào tạo học viên...</div>;
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-12 text-center text-slate-500">
+        <div className="inline-block animate-spin w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full mb-2" />
+        <div className="text-xs font-semibold">Đang tải dữ liệu hồ sơ đào tạo học viên...</div>
+      </div>
+    );
+  }
+
+  if (!enrollmentDetail || enrollments.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        <div className="p-12 bg-white rounded-2xl border border-slate-200 text-center space-y-4 shadow-sm">
+          <GraduationCap className="w-12 h-12 text-slate-400 mx-auto" />
+          <h2 className="text-lg font-bold text-slate-800">Chưa Có Hồ Sơ Học Viên Nào</h2>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Hiện chưa có học viên nào được xếp lớp. Học viên sẽ được tự động ghi danh và tạo hồ sơ tiến độ khi hoàn tất đơn tuyển sinh tại phân hệ POS.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('ems_navigate_tab', { detail: { tab: 'POS' } }));
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer"
+          >
+            Đi đến màn hình POS Bán Khóa Học →
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const en = enrollmentDetail;

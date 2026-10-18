@@ -58,10 +58,27 @@ export const POSScreen: React.FC = () => {
       setCombos(resCb.data || []);
       setProducts(resP.data || []);
       setLeads(resL.data || []);
+
+      // Auto-select lead if passed from CRM
+      const passedLeadId = sessionStorage.getItem('ems_pos_selected_lead');
+      if (passedLeadId) {
+        setSelectedLeadId(passedLeadId);
+        sessionStorage.removeItem('ems_pos_selected_lead');
+      }
     } catch (e: any) {
       console.error('Fetch error:', e);
     }
   };
+
+  useEffect(() => {
+    const handleNav = (e: any) => {
+      if (e.detail?.leadId) {
+        setSelectedLeadId(e.detail.leadId);
+      }
+    };
+    window.addEventListener('ems_navigate_tab', handleNav);
+    return () => window.removeEventListener('ems_navigate_tab', handleNav);
+  }, []);
 
   const selectedCourse = courses.find((c) => c.id === selectedCourseId);
   const selectedCombo = combos.find((c) => c.id === selectedComboId);
@@ -590,6 +607,18 @@ export const POSScreen: React.FC = () => {
                     alt="VietQR Code"
                     className="w-40 h-40 border-2 border-blue-400 rounded-lg shadow-md mx-auto bg-white p-1"
                   />
+                  <div className="pt-2 border-t border-slate-200 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('ems_navigate_tab', { detail: { tab: 'RECEIPTS' } }));
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 cursor-pointer hover:underline"
+                    >
+                      <span>Sang phân hệ Duyệt Chứng Từ & Đối Soát Phiếu Thu</span>
+                      <span>→</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

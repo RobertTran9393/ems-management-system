@@ -100,6 +100,19 @@ export function App() {
     }
   }, [currentUser, activeTab, hasModuleAccess]);
 
+  // Cross-module Navigation Event Listener for frictionless workflow transitions
+  useEffect(() => {
+    const handleCrossModuleNav = (e: any) => {
+      const targetTab = e.detail?.tab;
+      if (targetTab && (!currentUser || hasModuleAccess(currentUser, targetTab))) {
+        setActiveTab(targetTab);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('ems_navigate_tab', handleCrossModuleNav);
+    return () => window.removeEventListener('ems_navigate_tab', handleCrossModuleNav);
+  }, [currentUser, hasModuleAccess]);
+
   const handleLoginSuccess = (user: any, authToken: string) => {
     setCurrentUser(user);
     setToken(authToken);

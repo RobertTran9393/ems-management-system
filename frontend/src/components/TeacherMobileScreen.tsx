@@ -26,6 +26,7 @@ export const TeacherMobileScreen: React.FC = () => {
   const [zaloMessageContent, setZaloMessageContent] = useState('');
   const [copied, setCopied] = useState(false);
 
+  const [loading, setLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -35,6 +36,7 @@ export const TeacherMobileScreen: React.FC = () => {
 
   const fetchSessions = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/attendance/sessions`);
       const data = await res.json();
       if (data.success && data.data.length > 0) {
@@ -52,9 +54,14 @@ export const TeacherMobileScreen: React.FC = () => {
         });
         setAttendanceRecords(records);
         setComments(comms);
+      } else {
+        setSessions([]);
+        setSelectedSession(null);
       }
     } catch (e: any) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -176,8 +183,27 @@ export const TeacherMobileScreen: React.FC = () => {
     }
   };
 
-  if (!selectedSession) {
-    return <div className="p-8 text-center text-slate-500">Đang tải lịch dạy ca học...</div>;
+  if (loading) {
+    return (
+      <div className="p-12 text-center text-slate-500">
+        <div className="inline-block animate-spin w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full mb-2" />
+        <div className="text-xs font-semibold">Đang tải lịch dạy ca học...</div>
+      </div>
+    );
+  }
+
+  if (!selectedSession || sessions.length === 0) {
+    return (
+      <div className="p-6 max-w-md mx-auto">
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3 shadow-sm">
+          <Smartphone className="w-12 h-12 text-slate-400 mx-auto" />
+          <h3 className="text-base font-bold text-slate-800">Chưa Có Lịch Dạy Hôm Nay</h3>
+          <p className="text-xs text-slate-500">
+            Hiện chưa có ca học nào được xếp lịch hoặc hôm nay không có ca dạy. Giáo vụ có thể xếp lịch tại phân hệ Giáo Vụ & Đào Tạo.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const s = selectedSession;

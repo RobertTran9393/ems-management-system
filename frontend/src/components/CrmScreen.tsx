@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
-import { Users, Phone, UserPlus, Calendar, Award, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, Phone, UserPlus, Calendar, Award, CheckCircle, AlertCircle, ShoppingCart } from 'lucide-react';
 
 export const CrmScreen: React.FC = () => {
   const [leads, setLeads] = useState<any[]>([]);
@@ -155,53 +155,77 @@ export const CrmScreen: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {leads.map((l) => (
-              <tr key={l.id} className="hover:bg-slate-50 transition">
-                <td className="p-3">
-                  <div className="font-semibold text-slate-800">{l.studentName}</div>
-                  <div className="text-xs text-slate-500">PH: {l.parentName}</div>
-                </td>
-                <td className="p-3 font-mono text-slate-700 flex items-center gap-1 mt-1">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  {l.parentPhone}
-                </td>
-                <td className="p-3 text-slate-700">{l.interestedSubject}</td>
-                <td className="p-3">
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded font-bold ${
-                      l.status === 'CONVERTED'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : l.status === 'TRIAL_ATTENDED'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-blue-100 text-blue-800'
-                    }`}
-                  >
-                    {l.status}
-                  </span>
-                </td>
-                <td className="p-3">
-                  {l.trialSessions?.[0]?.entryTestScore ? (
-                    <div className="text-xs">
-                      <span className="font-bold text-blue-600">{l.trialSessions[0].entryTestScore} điểm</span>
-                      <div className="text-slate-500 truncate max-w-[180px]">{l.trialSessions[0].teacherEvaluation}</div>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400 italic">Chưa kiểm tra</span>
-                  )}
-                </td>
-                <td className="p-3 text-right space-x-2">
-                  <button
-                    onClick={() => {
-                      setActiveLead(l);
-                      setShowTrialModal(true);
-                    }}
-                    className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded font-semibold hover:bg-purple-100"
-                  >
-                    Xếp Học Thử / Nhập Điểm
-                  </button>
+            {leads.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-slate-400 text-xs">
+                  Chưa có khách hàng tiềm năng nào. Bấm <strong>"+ Tiếp Nhận Lead Mới"</strong> để thêm khách hàng.
                 </td>
               </tr>
-            ))}
+            ) : (
+              leads.map((l) => (
+                <tr key={l.id} className="hover:bg-slate-50 transition">
+                  <td className="p-3">
+                    <div className="font-semibold text-slate-800">{l.studentName}</div>
+                    <div className="text-xs text-slate-500">PH: {l.parentName}</div>
+                  </td>
+                  <td className="p-3 font-mono text-slate-700 flex items-center gap-1 mt-1">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    {l.parentPhone}
+                  </td>
+                  <td className="p-3 text-slate-700">{l.interestedSubject}</td>
+                  <td className="p-3">
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded font-bold ${
+                        l.status === 'CONVERTED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : l.status === 'TRIAL_ATTENDED'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {l.status}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    {l.trialSessions?.[0]?.entryTestScore ? (
+                      <div className="text-xs">
+                        <span className="font-bold text-blue-600">{l.trialSessions[0].entryTestScore} điểm</span>
+                        <div className="text-slate-500 truncate max-w-[180px]">{l.trialSessions[0].teacherEvaluation}</div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">Chưa kiểm tra</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveLead(l);
+                          setShowTrialModal(true);
+                        }}
+                        className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-lg font-semibold hover:bg-purple-100 transition cursor-pointer"
+                      >
+                        Xếp Học Thử / Điểm
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem('ems_pos_selected_lead', l.id);
+                          window.dispatchEvent(new CustomEvent('ems_navigate_tab', { detail: { tab: 'POS', leadId: l.id } }));
+                        }}
+                        className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg font-semibold hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1"
+                        title="Chuyển sang màn hình POS để làm thủ tục thu học phí"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Thu Phí (POS)</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

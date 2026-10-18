@@ -411,7 +411,14 @@ export const ReceiptVerificationScreen: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredInstallments.map((inst) => {
+                {filteredInstallments.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400 text-xs">
+                      Không có đợt thanh toán nào trong danh mục này.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInstallments.map((inst) => {
                   const hasProof = Boolean(inst.proofImageUrl);
                   const isPaid = inst.status === 'PAID';
                   const isCash = inst.paymentMethod === 'CASH';
@@ -535,7 +542,7 @@ export const ReceiptVerificationScreen: React.FC = () => {
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
