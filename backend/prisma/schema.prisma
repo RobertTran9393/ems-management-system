@@ -142,6 +142,8 @@ model User {
   payrolls              Payroll[]
   adminTimesheets       AdminTimesheet[]
 
+  @@index([branchId])
+  @@index([role, status])
   @@map("users")
 }
 
@@ -290,6 +292,9 @@ model Class {
   sessions        ClassSession[]
   enrollments     Enrollment[]
 
+  @@index([branchId, status])
+  @@index([courseId])
+  @@index([mainTeacherId])
   @@map("classes")
 }
 
@@ -337,6 +342,8 @@ model InventoryLog {
   referenceId String?  @map("reference_id") // OrderId hoặc ImportBatchId
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([branchId, productId])
+  @@index([createdAt])
   @@map("inventory_logs")
 }
 
@@ -379,6 +386,8 @@ model OrderItem {
   unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
   totalPrice  Decimal  @map("total_price") @db.Decimal(12, 2)
 
+  @@index([orderId])
+  @@index([productId])
   @@map("order_items")
 }
 
@@ -405,6 +414,9 @@ model PaymentInstallment {
   status         InstallmentStatus @default(PENDING)
   createdAt      DateTime          @default(now()) @map("created_at")
 
+  @@index([orderId])
+  @@index([status, isProvisionallyApproved])
+  @@index([dueDate])
   @@map("payment_installments")
 }
 
@@ -433,6 +445,7 @@ model Student {
   assessments    StudentAssessment[]
   reservations   Reservation[]
 
+  @@index([branchId, status])
   @@index([parentPhone])
   @@map("students")
 }
@@ -470,6 +483,9 @@ model Enrollment {
   reservations            Reservation[]
 
   @@index([studentId, status])
+  @@index([courseId])
+  @@index([currentClassId])
+  @@index([assignedTeacherId])
   @@map("enrollments")
 }
 
@@ -491,6 +507,8 @@ model StudentAssessment {
   createdAt         DateTime       @default(now()) @map("created_at")
 
   @@unique([enrollmentId, testType])
+  @@index([studentId])
+  @@index([teacherId])
   @@map("student_assessments")
 }
 
@@ -509,6 +527,8 @@ model Reservation {
   status           String      @default("ACTIVE") // ACTIVE, RESUMED, CANCELLED
   createdAt        DateTime    @default(now()) @map("created_at")
 
+  @@index([enrollmentId])
+  @@index([studentId, status])
   @@map("reservations")
 }
 
@@ -539,6 +559,8 @@ model ClassSession {
 
   @@unique([classId, sessionNumber])
   @@index([teacherId, sessionDate])
+  @@index([classId, sessionDate])
+  @@index([sessionStatus])
   @@map("class_sessions")
 }
 
@@ -558,6 +580,8 @@ model Attendance {
   createdAt        DateTime         @default(now()) @map("created_at")
 
   @@unique([classSessionId, studentId])
+  @@index([enrollmentId, status])
+  @@index([studentId])
   @@map("attendances")
 }
 
@@ -587,6 +611,7 @@ model AdminTimesheet {
   note         String?
   createdAt    DateTime @default(now()) @map("created_at")
 
+  @@index([userId, workDate])
   @@map("admin_timesheets")
 }
 
@@ -613,6 +638,7 @@ model Payroll {
   items                     PayrollItem[]
 
   @@unique([userId, month, year])
+  @@index([month, year, status])
   @@map("payrolls")
 }
 
@@ -628,6 +654,7 @@ model PayrollItem {
   note              String?
   createdAt         DateTime         @default(now()) @map("created_at")
 
+  @@index([payrollId])
   @@map("payroll_items")
 }
 
@@ -643,6 +670,8 @@ model WebhookLog {
   transactionRef String?  @map("transaction_ref")
   createdAt      DateTime @default(now()) @map("created_at")
 
+  @@index([isProcessed])
+  @@index([transactionRef])
   @@map("webhook_logs")
 }
 
@@ -655,5 +684,7 @@ model ZnsLog {
   response     Json?
   createdAt    DateTime @default(now()) @map("created_at")
 
+  @@index([phone, status])
+  @@index([createdAt])
   @@map("zns_logs")
 }
