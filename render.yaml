@@ -1,8 +1,8 @@
 services:
-  # Backend Web Service
+  # Backend Web Service (Node.js)
   - type: web
     name: ems-backend
-    env: node
+    runtime: node
     plan: free
     rootDir: backend
     buildCommand: npm install && npx prisma generate && npm run build
@@ -17,11 +17,9 @@ services:
           name: ems-postgres
           property: connectionString
 
-  # Frontend Static Site
-  - type: web
+  # Frontend Static Site (React Vite)
+  - type: static
     name: ems-frontend
-    env: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
