@@ -7,3 +7,17 @@ if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
 }
 
 export const API_BASE_URL = apiUrl;
+
+/**
+ * Returns HTTP headers automatically populated with JWT Bearer Token if present.
+ */
+export function getAuthHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+  const token = localStorage.getItem('ems_token');
+  const headers: Record<string, string> = {
+    ...customHeaders,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}

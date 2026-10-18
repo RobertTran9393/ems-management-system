@@ -13,18 +13,53 @@ import { payrollRouter } from './modules/payroll/payroll.router';
 import { pluginRouter } from './modules/plugin/plugin.router';
 import { eventBus, DomainEvent } from './events/event-bus';
 
+import { authenticateToken } from './middlewares/auth.middleware';
+
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-app.use(cors());
-app.use(express.json());
+// Security Hardening: Disable information disclosure header
+app.disable('x-powered-by');
 
-// Serve static uploaded receipts / files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Security Hardening: HTTP Security Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
-// Request logger
+// Security Hardening: CORS with safe origin headers
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
+
+// Security Hardening: Prevent DoS via payload size limits
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// Global authentication extractor (populates req.user if token is present)
+app.use(authenticateToken);
+
+// Serve static uploaded receipts / files safely (Sandbox uploads to prevent stored XSS)
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    next();
+  },
+  express.static(path.join(__dirname, '../uploads'), {
+    dotfiles: 'ignore',
+    index: false,
+  })
+);
+
+// Request logger (safe metadata only)
 app.use((req, res, next) => {
   console.log(`[HTTP] ${req.method} ${req.url}`);
   next();

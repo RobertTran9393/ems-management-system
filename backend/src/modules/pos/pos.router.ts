@@ -8,31 +8,45 @@ import fs from 'fs';
 
 export const posRouter = Router();
 
-// Configure Multer for Receipt Uploads
+// Configure Multer for Receipt Uploads with Strict Security Whitelist
 const uploadDir = path.join(__dirname, '../../../uploads/receipts');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueName = `receipt-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const safeExt = ALLOWED_EXTENSIONS.has(rawExt) ? rawExt : '.png';
+    const uniqueName = `receipt-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`;
     cb(null, uniqueName);
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext) || !ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      return cb(new Error('Tệp không hợp lệ: Chỉ chấp nhận ảnh biên lai định dạng JPG, PNG hoặc WEBP'));
+    }
+    cb(null, true);
+  },
 });
 
 // 1. Upload Receipt Image
-posRouter.post('/upload-receipt', upload.single('receipt'), (req: Request, res: Response) => {
-  try {
+posRouter.post('/upload-receipt', (req: Request, res: Response) => {
+  upload.single('receipt')(req, res, (err: any) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Lỗi khi tải ảnh chứng từ' });
+    }
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Chưa chọn file ảnh chứng từ' });
     }
@@ -43,9 +57,7 @@ posRouter.post('/upload-receipt', upload.single('receipt'), (req: Request, res: 
       filename: req.file.filename,
       message: 'Tải lên chứng từ thành công',
     });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
+  });
 });
 
 // 2. Get Installments list (for Accounting & Verification)
