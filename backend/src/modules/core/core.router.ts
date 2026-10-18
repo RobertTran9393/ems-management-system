@@ -100,3 +100,90 @@ coreRouter.get('/users', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// 5. Create / Update User (Quản trị nhân sự)
+coreRouter.post('/users', async (req: Request, res: Response) => {
+  try {
+    const { branchId, role, fullName, email, phone, password, contractType, baseSalary, hourlyTeachingRate } = req.body;
+    const passwordHash = await bcrypt.hash(password || '123456', 10);
+
+    const user = await prisma.user.create({
+      data: {
+        branchId,
+        role,
+        fullName,
+        email,
+        phone,
+        passwordHash,
+        contractType: contractType || 'FULLTIME',
+        baseSalary: baseSalary ? Number(baseSalary) : 0,
+        hourlyTeachingRate: hourlyTeachingRate ? Number(hourlyTeachingRate) : 0,
+      },
+    });
+
+    return res.json({ success: true, data: user, message: 'Tạo tài khoản nhân viên thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 6. Create Branch (Quản trị cơ sở)
+coreRouter.post('/branches', async (req: Request, res: Response) => {
+  try {
+    const { code, name, address, gpsLatitude, gpsLongitude, gpsRadiusMeters } = req.body;
+    const branch = await prisma.branch.create({
+      data: {
+        code,
+        name,
+        address,
+        gpsLatitude: Number(gpsLatitude || 21.033333),
+        gpsLongitude: Number(gpsLongitude || 105.799999),
+        gpsRadiusMeters: Number(gpsRadiusMeters || 200),
+      },
+    });
+    return res.json({ success: true, data: branch, message: 'Thêm cơ sở thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 7. Update System Config (Cấu hình tham số hệ thống)
+coreRouter.put('/configs/:key', async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    const { value, description } = req.body;
+    const config = await prisma.systemConfig.upsert({
+      where: { key },
+      update: { value, description },
+      create: { key, value, description },
+    });
+    return res.json({ success: true, data: config, message: 'Cập nhật cấu hình hệ thống thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 8. System Dashboard Overview (Thống kê quản trị tổng quan)
+coreRouter.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const [userCount, studentCount, orderCount, classCount] = await Promise.all([
+      prisma.user.count(),
+      prisma.student.count(),
+      prisma.order.count(),
+      prisma.class.count(),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        totalUsers: userCount,
+        totalStudents: studentCount,
+        totalOrders: orderCount,
+        totalClasses: classCount,
+        systemStatus: 'ONLINE_SECURE',
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});

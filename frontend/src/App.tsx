@@ -5,13 +5,14 @@ import { AcademicScreen } from './components/AcademicScreen';
 import { PayrollScreen } from './components/PayrollScreen';
 import { TeacherMobileScreen } from './components/TeacherMobileScreen';
 import { CrmScreen } from './components/CrmScreen';
+import { AdminScreen } from './components/AdminScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, LogOut, UserCheck } from 'lucide-react';
+import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut } from 'lucide-react';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
+  const [activeTab, setActiveTab] = useState<'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
 
   // Check saved session on mount
   useEffect(() => {
@@ -20,7 +21,11 @@ export function App() {
     if (savedToken && savedUser) {
       try {
         setToken(savedToken);
-        setCurrentUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
+        if (parsed.role === 'ADMIN') {
+          setActiveTab('ADMIN');
+        }
       } catch (e) {
         localStorage.removeItem('ems_token');
         localStorage.removeItem('ems_user');
@@ -31,7 +36,9 @@ export function App() {
   const handleLoginSuccess = (user: any, authToken: string) => {
     setCurrentUser(user);
     setToken(authToken);
-    if (user.role === 'TEACHER') {
+    if (user.role === 'ADMIN') {
+      setActiveTab('ADMIN');
+    } else if (user.role === 'TEACHER') {
       setActiveTab('MOBILE');
     } else if (user.role === 'ACCOUNTANT') {
       setActiveTab('RECEIPTS');
@@ -62,6 +69,8 @@ export function App() {
     SALE: 'Tư Vấn Tuyển Sinh',
   };
 
+  const isAdmin = currentUser.role === 'ADMIN';
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
       {/* Top Navbar */}
@@ -84,6 +93,21 @@ export function App() {
 
           {/* Navigation Tabs */}
           <nav className="flex items-center space-x-1 sm:space-x-2">
+            {/* Admin Tab (Shown prominently for Admin) */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('ADMIN')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                  activeTab === 'ADMIN'
+                    ? 'bg-purple-600 text-white shadow'
+                    : 'text-purple-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Quản Trị Hệ Thống</span>
+              </button>
+            )}
+
             <button
               onClick={() => setActiveTab('POS')}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition ${
@@ -176,6 +200,7 @@ export function App() {
 
       {/* Main Content View */}
       <main className="flex-1">
+        {activeTab === 'ADMIN' && <AdminScreen />}
         {activeTab === 'POS' && <POSScreen />}
         {activeTab === 'RECEIPTS' && <ReceiptVerificationScreen />}
         {activeTab === 'ACADEMIC' && <AcademicScreen />}
