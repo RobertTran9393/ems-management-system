@@ -105,12 +105,36 @@ const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: str
     desc: 'Gán vào quy trình thu ngân, biểu phí và bán hàng',
     placeholderKey: 'VD: PHU_THU_GIAO_TRINH',
   },
+  BRANDING: {
+    label: 'THƯƠNG HIỆU & GIAO DIỆN',
+    color: 'bg-purple-50 text-purple-800 border-purple-300',
+    desc: 'Cấu hình nhận diện thương hiệu, tên hệ thống và logo',
+    placeholderKey: 'VD: SYSTEM_NAME',
+  },
+  PERMISSIONS: {
+    label: 'PHÂN QUYỀN HỆ THỐNG',
+    color: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    desc: 'Cấu hình ma trận phân quyền vai trò & module',
+    placeholderKey: 'VD: SYSTEM_ROLE_PERMISSIONS',
+  },
   GENERAL: {
     label: 'QUẢN TRỊ & KHÁC',
     color: 'bg-slate-100 text-slate-700 border-slate-300',
     desc: 'Cấu hình tham số hệ thống chung',
     placeholderKey: 'VD: BAN_KINH_CHAM_CONG_MAC_DINH',
   },
+};
+
+const detectConfigDomain = (cfg: { key: string; category?: string | null }): string => {
+  if (cfg.category && BUSINESS_DOMAINS[cfg.category]) {
+    return cfg.category;
+  }
+  if (cfg.key.startsWith('SYSTEM_ROLE') || cfg.key.startsWith('SYSTEM_USER')) return 'PERMISSIONS';
+  if (cfg.key.startsWith('SYSTEM_')) return 'BRANDING';
+  if (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')) return 'PAYROLL';
+  if (cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')) return 'ACADEMIC';
+  if (cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')) return 'POS';
+  return 'GENERAL';
 };
 
 const THEME_PRESETS = [
@@ -2879,18 +2903,7 @@ export function AdminScreen() {
               Tất cả ({configs.length})
             </button>
             {Object.entries(BUSINESS_DOMAINS).map(([domainKey, domain]) => {
-              const count = configs.filter((c) => {
-                const detected =
-                  c.category ||
-                  (c.key.includes('BONUS') || c.key.includes('SALARY') || c.key.includes('ALLOWANCE')
-                    ? 'PAYROLL'
-                    : c.key.includes('MONTHS') || c.key.includes('RESERVATION') || c.key.includes('DEADLINE')
-                    ? 'ACADEMIC'
-                    : c.key.includes('FEE') || c.key.includes('PRICE') || c.key.includes('DISCOUNT')
-                    ? 'POS'
-                    : 'GENERAL');
-                return detected === domainKey;
-              }).length;
+              const count = configs.filter((c) => detectConfigDomain(c) === domainKey).length;
 
               return (
                 <button
@@ -2927,28 +2940,16 @@ export function AdminScreen() {
               configs
                 .filter((c) => {
                   if (configFilter === 'ALL') return true;
-                  const detected =
-                    c.category ||
-                    (c.key.includes('BONUS') || c.key.includes('SALARY') || c.key.includes('ALLOWANCE')
-                      ? 'PAYROLL'
-                      : c.key.includes('MONTHS') || c.key.includes('RESERVATION') || c.key.includes('DEADLINE')
-                      ? 'ACADEMIC'
-                      : c.key.includes('FEE') || c.key.includes('PRICE') || c.key.includes('DISCOUNT')
-                      ? 'POS'
-                      : 'GENERAL');
-                  return detected === configFilter;
+                  return detectConfigDomain(c) === configFilter;
                 })
                 .map((cfg) => {
-                  const domainKey =
-                    cfg.category ||
-                    (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')
-                      ? 'PAYROLL'
-                      : cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')
-                      ? 'ACADEMIC'
-                      : cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')
-                      ? 'POS'
-                      : 'GENERAL');
+                  const domainKey = detectConfigDomain(cfg);
                   const domain = BUSINESS_DOMAINS[domainKey] || BUSINESS_DOMAINS.GENERAL;
+                  const isSystemKey = cfg.key.startsWith('SYSTEM_');
+                  const isComplexJson =
+                    cfg.key === 'SYSTEM_MODULE_NAMES' ||
+                    cfg.key === 'SYSTEM_ROLE_PERMISSIONS' ||
+                    cfg.key === 'SYSTEM_USER_PERMISSIONS';
 
                   return (
                     <div key={cfg.id || cfg.key} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
@@ -2964,9 +2965,16 @@ export function AdminScreen() {
                             <option value="PAYROLL">💰 BẢNG LƯƠNG & KPI</option>
                             <option value="ACADEMIC">📚 ĐÀO TẠO & GIÁO VỤ</option>
                             <option value="POS">💳 POS & HỌC PHÍ</option>
+                            <option value="BRANDING">🎨 THƯƠNG HIỆU & GIAO DIỆN</option>
+                            <option value="PERMISSIONS">🛡️ PHÂN QUYỀN HỆ THỐNG</option>
                             <option value="GENERAL">⚙️ QUẢN TRỊ & KHÁC</option>
                           </select>
                           <span className="font-mono text-xs font-bold text-slate-900">{cfg.key}</span>
+                          {isSystemKey && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase">
+                              Hệ Thống
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-600">{cfg.description || domain.desc}</div>
                         <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
@@ -2976,26 +2984,34 @@ export function AdminScreen() {
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <div className="relative">
-                          <input
-                            type="text"
-                            defaultValue={cfg.value}
-                            onBlur={(e) => {
-                              if (e.target.value !== cfg.value) {
-                                handleUpdateConfig(cfg.key, e.target.value, cfg.description, domainKey);
-                              }
-                            }}
-                            className="w-36 sm:w-44 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-indigo-500 shadow-sm"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteConfig(cfg.key)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                          title={`Xoá tham số ${cfg.key}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {isComplexJson ? (
+                          <span className="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold">
+                            Tự động đồng bộ với phân hệ
+                          </span>
+                        ) : (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              defaultValue={cfg.value}
+                              onBlur={(e) => {
+                                if (e.target.value !== cfg.value) {
+                                  handleUpdateConfig(cfg.key, e.target.value, cfg.description, domainKey);
+                                }
+                              }}
+                              className="w-36 sm:w-56 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-indigo-500 shadow-sm"
+                            />
+                          </div>
+                        )}
+                        {!isSystemKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteConfig(cfg.key)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                            title={`Xoá tham số ${cfg.key}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
