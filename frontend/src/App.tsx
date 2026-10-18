@@ -1,14 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { POSScreen } from './components/POSScreen';
 import { ReceiptVerificationScreen } from './components/ReceiptVerificationScreen';
 import { AcademicScreen } from './components/AcademicScreen';
 import { PayrollScreen } from './components/PayrollScreen';
 import { TeacherMobileScreen } from './components/TeacherMobileScreen';
 import { CrmScreen } from './components/CrmScreen';
-import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users } from 'lucide-react';
+import { LoginScreen } from './components/LoginScreen';
+import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, LogOut, UserCheck } from 'lucide-react';
 
 export function App() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
+
+  // Check saved session on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('ems_token');
+    const savedUser = localStorage.getItem('ems_user');
+    if (savedToken && savedUser) {
+      try {
+        setToken(savedToken);
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        localStorage.removeItem('ems_token');
+        localStorage.removeItem('ems_user');
+      }
+    }
+  }, []);
+
+  const handleLoginSuccess = (user: any, authToken: string) => {
+    setCurrentUser(user);
+    setToken(authToken);
+    if (user.role === 'TEACHER') {
+      setActiveTab('MOBILE');
+    } else if (user.role === 'ACCOUNTANT') {
+      setActiveTab('RECEIPTS');
+    } else if (user.role === 'ACADEMIC_AFFAIRS') {
+      setActiveTab('ACADEMIC');
+    } else {
+      setActiveTab('POS');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('ems_token');
+    localStorage.removeItem('ems_user');
+    setCurrentUser(null);
+    setToken(null);
+  };
+
+  // If not logged in, show Login Screen
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  const roleNameMap: Record<string, string> = {
+    ADMIN: 'Quản Trị Viên',
+    ACCOUNTANT: 'Kế Toán',
+    ACADEMIC_AFFAIRS: 'Giáo Vụ',
+    TEACHER: 'Giáo Viên',
+    SALE: 'Tư Vấn Tuyển Sinh',
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -31,7 +83,7 @@ export function App() {
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="flex space-x-1 sm:space-x-2">
+          <nav className="flex items-center space-x-1 sm:space-x-2">
             <button
               onClick={() => setActiveTab('POS')}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition ${
@@ -103,6 +155,21 @@ export function App() {
               <Users className="w-4 h-4" />
               <span>CRM Leads</span>
             </button>
+
+            {/* User Profile Badge & Logout */}
+            <div className="pl-2 ml-2 border-l border-slate-700 flex items-center gap-2">
+              <div className="hidden md:flex flex-col text-right">
+                <span className="text-xs font-semibold text-white">{currentUser.fullName}</span>
+                <span className="text-[10px] text-blue-400 font-medium">{roleNameMap[currentUser.role] || currentUser.role}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                title="Đăng xuất"
+                className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </nav>
         </div>
       </header>
@@ -119,7 +186,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-500">
-        Hệ Thống Quản Lý Nội Bộ & Đào Tạo Trung Tâm Toán Trí Tuệ và Kỹ Năng Sống (ERP & CRM v2.0) • Chạy Trực Tiếp Localhost
+        Hệ Thống Quản Lý Nội Bộ & Đào Tạo Trung Tâm Toán Trí Tuệ và Kỹ Năng Sống (ERP & CRM v2.0) • Đang đăng nhập: {currentUser.fullName} ({roleNameMap[currentUser.role] || currentUser.role})
       </footer>
     </div>
   );
