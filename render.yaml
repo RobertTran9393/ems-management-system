@@ -30,10 +30,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: ems-backend
-          property: host
+        value: https://ems-backend-mr7p.onrender.com
 
 databases:
   - name: ems-postgres

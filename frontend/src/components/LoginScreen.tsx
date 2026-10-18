@@ -37,7 +37,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       localStorage.setItem('ems_user', JSON.stringify(data.user));
       onLoginSuccess(data.user, data.token);
     } catch (err: any) {
-      setError(err.message || 'Lỗi kết nối máy chủ');
+      console.error('Login error:', err);
+      setError(`${err.message || 'Lỗi kết nối máy chủ'} (Target API: ${API_BASE_URL})`);
     } finally {
       setLoading(false);
     }
