@@ -4,12 +4,12 @@
   "description": "EMS - Training Center ERP & CRM Modular Monolith Backend",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc prisma/seed.ts --outDir prisma/dist",
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:seed": "node prisma/dist/seed.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
