@@ -16,7 +16,13 @@ import {
   Briefcase,
   Trash2,
   Filter,
-  Tag
+  Tag,
+  BookOpen,
+  Package,
+  Layers,
+  Boxes,
+  Coins,
+  Edit3
 } from 'lucide-react';
 
 const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: string; placeholderKey: string }> = {
@@ -47,11 +53,14 @@ const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: str
 };
 
 export function AdminScreen() {
-  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'CONFIGS'>('OVERVIEW');
+  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'COURSES' | 'PRODUCTS' | 'CONFIGS'>('OVERVIEW');
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [configs, setConfigs] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [combos, setCombos] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [configFilter, setConfigFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -86,25 +95,59 @@ export function AdminScreen() {
     description: '',
   });
 
+  // Form state for creating course
+  const [newCourse, setNewCourse] = useState({
+    courseCode: '',
+    name: '',
+    subjectType: 'TOAN_TRI_TUE',
+    levelOrder: 1,
+    tuitionFee: 3600000,
+    totalSessions: 24,
+    standardMonths: 3,
+    maxMonths: 4,
+  });
+
+  // Form state for creating product
+  const [newProduct, setNewProduct] = useState({
+    sku: '',
+    name: '',
+    unit: 'Quyển',
+    costPrice: 80000,
+    sellingPrice: 150000,
+    initialQty: 50,
+    branchId: '',
+  });
+
+  // Stock adjustment state
+  const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
+  const [adjustQty, setAdjustQty] = useState<number>(10);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsRes, usersRes, branchesRes, configsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/core/stats`).then((r) => r.json()),
-        fetch(`${API_BASE_URL}/api/core/users`).then((r) => r.json()),
-        fetch(`${API_BASE_URL}/api/core/branches`).then((r) => r.json()),
-        fetch(`${API_BASE_URL}/api/core/configs`).then((r) => r.json()),
+      const [statsRes, usersRes, branchesRes, configsRes, coursesRes, combosRes, productsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/core/stats`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/core/users`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/core/branches`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/core/configs`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/catalog/courses`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/catalog/combos`).then((r) => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/api/inventory/products`).then((r) => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (statsRes.success) setStats(statsRes.data);
       if (usersRes.success) setUsers(usersRes.data);
       if (branchesRes.success) {
         setBranches(branchesRes.data);
-        if (branchesRes.data.length > 0 && !newUser.branchId) {
-          setNewUser((prev) => ({ ...prev, branchId: branchesRes.data[0].id }));
+        if (branchesRes.data.length > 0) {
+          if (!newUser.branchId) setNewUser((prev) => ({ ...prev, branchId: branchesRes.data[0].id }));
+          if (!newProduct.branchId) setNewProduct((prev) => ({ ...prev, branchId: branchesRes.data[0].id }));
         }
       }
       if (configsRes.success) setConfigs(configsRes.data);
+      if (coursesRes.success) setCourses(coursesRes.data);
+      if (combosRes.success) setCombos(combosRes.data);
+      if (productsRes.success) setProducts(productsRes.data);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -219,6 +262,160 @@ export function AdminScreen() {
     }
   };
 
+  // Course Handlers
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/catalog/courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCourse),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`Đã tạo khóa học "${data.data.name}" thành công!`);
+        setNewCourse({
+          courseCode: '',
+          name: '',
+          subjectType: 'TOAN_TRI_TUE',
+          levelOrder: courses.length + 1,
+          tuitionFee: 3600000,
+          totalSessions: 24,
+          standardMonths: 3,
+          maxMonths: 4,
+        });
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi tạo khóa học');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateCourse = async (id: string, updateData: any) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/catalog/courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage('Cập nhật khóa học thành công!');
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi cập nhật khóa học');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCourse = async (id: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn ngưng hoạt động khóa học "${name}"?`)) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/catalog/courses/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`Đã ngưng khóa học "${name}" thành công!`);
+        await fetchData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Product Handlers
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/inventory/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProduct),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`Đã thêm sản phẩm "${data.data.name}" thành công!`);
+        setNewProduct({
+          sku: '',
+          name: '',
+          unit: 'Quyển',
+          costPrice: 80000,
+          sellingPrice: 150000,
+          initialQty: 50,
+          branchId: branches[0]?.id || '',
+        });
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi tạo sản phẩm');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateProduct = async (id: string, updateData: any) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/inventory/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage('Cập nhật sản phẩm thành công!');
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi cập nhật sản phẩm');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdjustStock = async (productId: string, branchId: string, changeQty: number) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/inventory/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId,
+          branchId,
+          changeQty,
+          actionType: 'RESTOCK',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage('Cập nhật tồn kho thành công!');
+        setAdjustingProduct(null);
+        await fetchData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -256,22 +453,46 @@ export function AdminScreen() {
       )}
 
       {/* Admin Subtabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3 mb-6">
+      <div className="flex gap-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveSubTab('OVERVIEW')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             activeSubTab === 'OVERVIEW'
               ? 'bg-indigo-600 text-white shadow'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
           <Database className="w-3.5 h-3.5" />
-          <span>Tổng Quan Hệ Thống</span>
+          <span>Tổng Quan</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('COURSES')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            activeSubTab === 'COURSES'
+              ? 'bg-indigo-600 text-white shadow'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Cài Đặt Khóa Học ({courses.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('PRODUCTS')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            activeSubTab === 'PRODUCTS'
+              ? 'bg-indigo-600 text-white shadow'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          <span>Cài Đặt Sản Phẩm ({products.length})</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('USERS')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             activeSubTab === 'USERS'
               ? 'bg-indigo-600 text-white shadow'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -283,7 +504,7 @@ export function AdminScreen() {
 
         <button
           onClick={() => setActiveSubTab('BRANCHES')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             activeSubTab === 'BRANCHES'
               ? 'bg-indigo-600 text-white shadow'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -295,14 +516,14 @@ export function AdminScreen() {
 
         <button
           onClick={() => setActiveSubTab('CONFIGS')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             activeSubTab === 'CONFIGS'
               ? 'bg-indigo-600 text-white shadow'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
           <Sliders className="w-3.5 h-3.5" />
-          <span>Tham Số & Định Mức KPI ({configs.length})</span>
+          <span>Tham Số & KPI ({configs.length})</span>
         </button>
       </div>
 
@@ -353,6 +574,408 @@ export function AdminScreen() {
                 <span className="text-indigo-300 block mb-1">Bảo mật API:</span>
                 <span className="font-semibold text-emerald-400">HTTPS SSL + JWT Enabled</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subtab: Courses & Tuition Settings */}
+      {activeSubTab === 'COURSES' && (
+        <div className="space-y-6">
+          {/* Form thêm khóa học mới */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  Cài Đặt & Thêm Khóa Học Mới
+                </h2>
+                <span className="text-xs text-slate-500">Khóa học sẽ hiển thị ngay trên POS Thu Ngân & Phân Lớp Giáo Vụ</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateCourse} className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã Khóa Học (In hoa)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: SOROBAN-03"
+                    value={newCourse.courseCode}
+                    onChange={(e) => setNewCourse({ ...newCourse, courseCode: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Khóa Học</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Toán Trí Tuệ Soroban Cấp Độ 3"
+                    value={newCourse.name}
+                    onChange={(e) => setNewCourse({ ...newCourse, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Phân Loại Bộ Môn</label>
+                  <select
+                    value={newCourse.subjectType}
+                    onChange={(e) => setNewCourse({ ...newCourse, subjectType: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                  >
+                    <option value="TOAN_TRI_TUE">🧮 Toán Trí Tuệ (Soroban)</option>
+                    <option value="KY_NANG_SONG">🌱 Kỹ Năng Sống</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Học Phí Niêm Yết (VNĐ)</label>
+                  <input
+                    type="number"
+                    step="10000"
+                    required
+                    placeholder="VD: 3600000"
+                    value={newCourse.tuitionFee}
+                    onChange={(e) => setNewCourse({ ...newCourse, tuitionFee: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-bold text-indigo-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Cấp Độ (Level Order)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newCourse.levelOrder}
+                    onChange={(e) => setNewCourse({ ...newCourse, levelOrder: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Quy Chuẩn Số Buổi</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newCourse.totalSessions}
+                    onChange={(e) => setNewCourse({ ...newCourse, totalSessions: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Kỳ Hạn Chuẩn (Tháng)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newCourse.standardMonths}
+                    onChange={(e) => setNewCourse({ ...newCourse, standardMonths: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tạo Khóa Học Mới</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Danh sách Khóa Học */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-slate-800">Danh Sách Khóa Học & Biểu Phí Đang Áp Dụng</h3>
+              <span className="text-xs text-slate-500 font-medium">{courses.length} khóa học</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                    <th className="p-3.5">Mã Khóa</th>
+                    <th className="p-3.5">Tên Khóa Học</th>
+                    <th className="p-3.5">Bộ Môn</th>
+                    <th className="p-3.5 text-center">Cấp Độ</th>
+                    <th className="p-3.5 text-center">Lộ Trình</th>
+                    <th className="p-3.5 text-right">Học Phí Niêm Yết (VNĐ)</th>
+                    <th className="p-3.5 text-center">Trạng Thái</th>
+                    <th className="p-3.5 text-center">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {courses.map((course) => (
+                    <tr key={course.id} className="hover:bg-slate-50 transition">
+                      <td className="p-3.5 font-mono font-bold text-slate-900">{course.courseCode}</td>
+                      <td className="p-3.5 font-semibold text-slate-800">{course.name}</td>
+                      <td className="p-3.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          course.subjectType === 'TOAN_TRI_TUE' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {course.subjectType === 'TOAN_TRI_TUE' ? 'Toán Trí Tuệ' : 'Kỹ Năng Sống'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center font-bold text-indigo-600">Level {course.levelOrder}</td>
+                      <td className="p-3.5 text-center text-slate-600">
+                        {course.totalSessions} buổi / {course.standardMonths} tháng
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <input
+                          type="number"
+                          step="10000"
+                          defaultValue={Number(course.tuitionFee)}
+                          onBlur={(e) => {
+                            if (Number(e.target.value) !== Number(course.tuitionFee)) {
+                              handleUpdateCourse(course.id, { tuitionFee: Number(e.target.value) });
+                            }
+                          }}
+                          className="w-32 px-2.5 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                          title="Sửa học phí rồi rời chuột để lưu"
+                        />
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {course.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCourse(course.id, course.name)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          title="Ngưng kích hoạt khóa học"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subtab: Products & Inventory Settings */}
+      {activeSubTab === 'PRODUCTS' && (
+        <div className="space-y-6">
+          {/* Form thêm sản phẩm mới */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-indigo-600" />
+                  Cài Đặt & Thêm Sản Phẩm / Giáo Cụ Mới
+                </h2>
+                <span className="text-xs text-slate-500">Giáo trình, bàn tính, đồng phục, phụ kiện phục vụ học tập</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateProduct} className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã SKU (In hoa)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: BOOK-SB2"
+                    value={newProduct.sku}
+                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Sản Phẩm / Giáo Cụ</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Sách Giáo Trình Soroban Cấp 2"
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Đơn Vị Tính</label>
+                  <select
+                    value={newProduct.unit}
+                    onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                  >
+                    <option value="Quyển">Quyển (Sách, giáo trình)</option>
+                    <option value="Cái">Cái (Bàn tính, thước kẻ)</option>
+                    <option value="Bộ">Bộ (Đồng phục, combo cụ)</option>
+                    <option value="Chiếc">Chiếc (Balo, túi xách)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Cơ Sở Nhập Kho Đầu Kỳ</label>
+                  <select
+                    value={newProduct.branchId}
+                    onChange={(e) => setNewProduct({ ...newProduct, branchId: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Vốn Nhập Kho (VNĐ)</label>
+                  <input
+                    type="number"
+                    step="5000"
+                    required
+                    value={newProduct.costPrice}
+                    onChange={(e) => setNewProduct({ ...newProduct, costPrice: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold text-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Giá Bán Niêm Yết Lẻ (VNĐ)</label>
+                  <input
+                    type="number"
+                    step="5000"
+                    required
+                    value={newProduct.sellingPrice}
+                    onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-indigo-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Số Lượng Nhập Ban Đầu</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={newProduct.initialQty}
+                    onChange={(e) => setNewProduct({ ...newProduct, initialQty: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-bold text-emerald-700"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Lưu Sản Phẩm Mới</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Danh sách Sản Phẩm & Tồn Kho */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-slate-800">Danh Mục Sản Phẩm & Tồn Kho Chi Nhánh</h3>
+              <span className="text-xs text-slate-500 font-medium">{products.length} mặt hàng</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                    <th className="p-3.5">Mã SKU</th>
+                    <th className="p-3.5">Tên Sản Phẩm</th>
+                    <th className="p-3.5 text-center">ĐVT</th>
+                    <th className="p-3.5 text-right">Giá Vốn (VNĐ)</th>
+                    <th className="p-3.5 text-right">Giá Bán Niêm Yết (VNĐ)</th>
+                    <th className="p-3.5 text-center">Tồn Kho</th>
+                    <th className="p-3.5 text-center">Trạng Thái</th>
+                    <th className="p-3.5 text-center">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {products.map((prod) => {
+                    const totalQty = prod.branchStocks?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
+                    return (
+                      <tr key={prod.id} className="hover:bg-slate-50 transition">
+                        <td className="p-3.5 font-mono font-bold text-slate-900">{prod.sku}</td>
+                        <td className="p-3.5 font-semibold text-slate-800">{prod.name}</td>
+                        <td className="p-3.5 text-center text-slate-600">{prod.unit}</td>
+                        <td className="p-3.5 text-right">
+                          <input
+                            type="number"
+                            step="5000"
+                            defaultValue={Number(prod.costPrice)}
+                            onBlur={(e) => {
+                              if (Number(e.target.value) !== Number(prod.costPrice)) {
+                                handleUpdateProduct(prod.id, { costPrice: Number(e.target.value) });
+                              }
+                            }}
+                            className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg text-slate-700 bg-white focus:outline-none focus:border-indigo-600"
+                            title="Sửa giá vốn rồi rời chuột để lưu"
+                          />
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <input
+                            type="number"
+                            step="5000"
+                            defaultValue={Number(prod.sellingPrice)}
+                            onBlur={(e) => {
+                              if (Number(e.target.value) !== Number(prod.sellingPrice)) {
+                                handleUpdateProduct(prod.id, { sellingPrice: Number(e.target.value) });
+                              }
+                            }}
+                            className="w-28 px-2 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                            title="Sửa giá bán rồi rời chuột để lưu"
+                          />
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                            totalQty > 10 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                            {totalQty} {prod.unit}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {prod.status}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const qtyStr = prompt(`Nhập số lượng bổ sung vào kho cho "${prod.name}":`, '10');
+                              if (qtyStr && !isNaN(Number(qtyStr)) && branches.length > 0) {
+                                handleAdjustStock(prod.id, branches[0].id, Number(qtyStr));
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                          >
+                            + Nhập Kho
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
