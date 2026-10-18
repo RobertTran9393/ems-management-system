@@ -43,6 +43,22 @@ eventBus.subscribe(DomainEvent.COURSE_COMPLETED_AND_PASSED, async (payload) => {
   console.log(`[Event Handler] 🎯 Handled COURSE_COMPLETED_AND_PASSED for Student #${payload.studentId}`);
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    message: '🎉 Chào mừng đến với API Hệ Thống Quản Lý Trung Tâm Đào Tạo EMS (SRS v2.0)',
+    status: 'ONLINE',
+    version: '2.0.0',
+    documentation: {
+      health: '/health',
+      pos: '/api/pos/orders',
+      academic: '/api/academic/enrollments',
+      attendance: '/api/attendance/sessions',
+      payroll: '/api/payroll'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
