@@ -144,20 +144,25 @@ export function AdminScreen() {
     }
   };
 
-  const handleUpdateConfig = async (key: string, value: string) => {
+  const handleUpdateConfig = async (key: string, value: string, description?: string) => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/core/configs/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value }),
+        body: JSON.stringify({ value, description }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessage(`Đã cập nhật tham số ${key} = ${value}`);
-        fetchData();
+        setMessage(`Đã cập nhật tham số ${key} = ${value} thành công!`);
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi cập nhật cấu hình');
       }
     } catch (err: any) {
-      alert(err.message);
+      alert(`Lỗi kết nối máy chủ: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -690,7 +695,7 @@ export function AdminScreen() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!newConfig.key || !newConfig.value) return;
-                await handleUpdateConfig(newConfig.key.trim().toUpperCase(), newConfig.value.trim());
+                await handleUpdateConfig(newConfig.key.trim().toUpperCase(), newConfig.value.trim(), newConfig.description.trim());
                 setNewConfig({ key: '', value: '', description: '' });
               }}
               className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs"
@@ -742,31 +747,49 @@ export function AdminScreen() {
               <div className="p-8 text-center text-slate-500">
                 <Sliders className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-xs font-semibold text-slate-700">Chưa có tham số cấu hình nào trong cơ sở dữ liệu đám mây</p>
-                <p className="text-[11px] text-slate-400 mt-1">Bấm nút "Nạp 5 Cấu Hình Mặc Định" ở góc trên bên phải để nạp ngay các định mức KPI và hạn bảo lưu.</p>
+                <p className="text-[11px] text-slate-400 mt-1">Bấm nút "Nạp 5 Cấu Hình Chuẩn" ở góc trên bên phải để nạp ngay các định mức KPI và hạn bảo lưu.</p>
               </div>
             ) : (
-              configs.map((cfg) => (
-                <div key={cfg.id || cfg.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="font-mono text-xs font-bold text-indigo-700">{cfg.key}</div>
-                    <div className="text-xs text-slate-600 mt-0.5">{cfg.description}</div>
-                  </div>
+              configs.map((cfg) => {
+                // Determine which business module this config belongs to
+                let domainBadge = { label: 'TÙY CHỈNH', color: 'bg-slate-100 text-slate-700 border-slate-300', desc: 'Tham số bổ sung' };
+                if (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')) {
+                  domainBadge = { label: 'BẢNG LƯƠNG & KPI', color: 'bg-amber-50 text-amber-800 border-amber-300', desc: 'Gán vào công thức tính lương giáo viên hàng tháng' };
+                } else if (cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')) {
+                  domainBadge = { label: 'ĐÀO TẠO & GIÁO VỤ', color: 'bg-indigo-50 text-indigo-800 border-indigo-300', desc: 'Gán vào quy chế bảo lưu và hạn hoàn thành 24 buổi' };
+                } else if (cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')) {
+                  domainBadge = { label: 'POS & HỌC PHÍ', color: 'bg-blue-50 text-blue-800 border-blue-300', desc: 'Gán vào quy trình thu ngân và bán hàng' };
+                }
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      defaultValue={cfg.value}
-                      onBlur={(e) => {
-                        if (e.target.value !== cfg.value) {
-                          handleUpdateConfig(cfg.key, e.target.value);
-                        }
-                      }}
-                      className="w-40 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500"
-                    />
-                    <span className="text-[11px] text-slate-400">Rời chuột để lưu</span>
+                return (
+                  <div key={cfg.id || cfg.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${domainBadge.color}`}>
+                          {domainBadge.label}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-slate-900">{cfg.key}</span>
+                      </div>
+                      <div className="text-xs text-slate-600">{cfg.description || domainBadge.desc}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Phạm vi tác động: {domainBadge.desc}</div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="text"
+                        defaultValue={cfg.value}
+                        onBlur={(e) => {
+                          if (e.target.value !== cfg.value) {
+                            handleUpdateConfig(cfg.key, e.target.value, cfg.description);
+                          }
+                        }}
+                        className="w-40 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-indigo-500 shadow-sm"
+                      />
+                      <span className="text-[11px] text-slate-400">Rời chuột để lưu</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
