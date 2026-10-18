@@ -64,12 +64,14 @@ app.use('/api/attendance', attendanceRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/plugin', pluginRouter);
 
-app.listen(PORT, () => {
+const HOST = '0.0.0.0';
+
+app.listen(Number(PORT), HOST, () => {
   console.log(`
   🚀 ========================================================
      EMS Training Center ERP & CRM Backend (SRS v2.0)
-     Listening on: http://localhost:${PORT}
-     Static Uploads: http://localhost:${PORT}/uploads
+     Listening on: http://${HOST}:${PORT}
+     Static Uploads: http://${HOST}:${PORT}/uploads
      Status: Healthy & Connected to PostgreSQL
   🚀 ========================================================
   `);
