@@ -11,10 +11,65 @@ import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, 
 import { useBranding } from './context/BrandingContext';
 
 export function App() {
-  const { branding } = useBranding();
+  const { branding, hasModuleAccess } = useBranding();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
+
+  const navTabs = [
+    {
+      key: 'ADMIN' as const,
+      label: branding.moduleNames.ADMIN || 'Quản Trị',
+      icon: ShieldCheck,
+      colorClass: 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold',
+      inactiveColorClass: 'text-purple-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'POS' as const,
+      label: branding.moduleNames.POS || 'Thu Ngân POS',
+      icon: ShoppingCart,
+      colorClass: 'bg-blue-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'RECEIPTS' as const,
+      label: branding.moduleNames.RECEIPTS || 'Duyệt Chứng Từ',
+      icon: FileCheck,
+      colorClass: 'bg-emerald-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'ACADEMIC' as const,
+      label: branding.moduleNames.ACADEMIC || 'Giáo Vụ',
+      icon: GraduationCap,
+      colorClass: 'bg-indigo-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'PAYROLL' as const,
+      label: branding.moduleNames.PAYROLL || 'Bảng Lương',
+      icon: DollarSign,
+      colorClass: 'bg-amber-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'MOBILE' as const,
+      label: branding.moduleNames.MOBILE || 'App Giáo Viên',
+      icon: Smartphone,
+      colorClass: 'bg-violet-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'CRM' as const,
+      label: branding.moduleNames.CRM || 'Tuyển Sinh CRM',
+      icon: Users,
+      colorClass: 'bg-sky-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+  ];
+
+  // List of tabs this user is permitted to see
+  const allowedTabs = navTabs.filter((tab) => hasModuleAccess(currentUser, tab.key));
 
   // Check saved session on mount
   useEffect(() => {
@@ -34,6 +89,16 @@ export function App() {
       }
     }
   }, []);
+
+  // Guard: If current activeTab is not permitted, auto-switch to first allowed tab
+  useEffect(() => {
+    if (currentUser && !hasModuleAccess(currentUser, activeTab)) {
+      const firstAllowed = navTabs.find((t) => hasModuleAccess(currentUser, t.key));
+      if (firstAllowed) {
+        setActiveTab(firstAllowed.key);
+      }
+    }
+  }, [currentUser, activeTab, hasModuleAccess]);
 
   const handleLoginSuccess = (user: any, authToken: string) => {
     setCurrentUser(user);
@@ -70,8 +135,6 @@ export function App() {
     TEACHER: 'Giáo Viên',
     SALE: 'Tư Vấn Tuyển Sinh',
   };
-
-  const isAdmin = currentUser.role === 'ADMIN';
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -111,101 +174,25 @@ export function App() {
             </div>
           </div>
 
-          {/* Navigation Tabs - Balanced & Modern Pill Design */}
+          {/* Navigation Tabs - Filtered by Permissions & Custom Renamed */}
           <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-2xl border border-slate-800/80 overflow-x-auto scrollbar-none max-w-full">
-            {/* Admin Tab */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('ADMIN')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  activeTab === 'ADMIN'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm'
-                    : 'text-purple-300 hover:text-white hover:bg-slate-800/70'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Quản Trị</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('POS')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'POS'
-                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              <span>Thu Ngân POS</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('RECEIPTS')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'RECEIPTS'
-                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <FileCheck className="w-3.5 h-3.5" />
-              <span>Duyệt Chứng Từ</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('ACADEMIC')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'ACADEMIC'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Giáo Vụ</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('PAYROLL')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'PAYROLL'
-                  ? 'bg-amber-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <DollarSign className="w-3.5 h-3.5" />
-              <span>Bảng Lương</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('MOBILE')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'MOBILE'
-                  ? 'bg-violet-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>App Giáo Viên</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('CRM')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === 'CRM'
-                  ? 'bg-sky-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Tuyển Sinh CRM</span>
-            </button>
+            {allowedTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all cursor-pointer ${
+                    isActive ? `${tab.colorClass} shadow-sm` : tab.inactiveColorClass
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {/* User Profile & Logout */}

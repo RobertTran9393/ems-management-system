@@ -37,9 +37,53 @@ import {
   Eye,
   Undo2,
   LayoutTemplate,
-  Check
+  Check,
+  Lock,
+  RotateCcw,
+  CheckCircle2,
+  Search,
+  UserCheck,
+  Shield,
 } from 'lucide-react';
-import { useBranding } from '../context/BrandingContext';
+import { useBranding, ALL_MODULE_KEYS, DEFAULT_MODULE_NAMES } from '../context/BrandingContext';
+
+const SYSTEM_ROLES_INFO: Record<string, { label: string; desc: string; badgeColor: string }> = {
+  ADMIN: {
+    label: 'Ban Giám Đốc / Admin',
+    desc: 'Toàn quyền tối cao quản trị mọi cơ sở và các phân hệ hệ thống',
+    badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+  },
+  ACCOUNTANT: {
+    label: 'Kế Toán / Thu Ngân',
+    desc: 'Thu ngân, bán khóa học/học phẩm, biên lai hóa đơn & bảng lương',
+    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  },
+  ACADEMIC_AFFAIRS: {
+    label: 'Giáo Vụ / Đào Tạo',
+    desc: 'Quản lý lịch học, xếp lớp, điểm danh 24 buổi và tình trạng học viên',
+    badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  SALE: {
+    label: 'Tư Vấn Tuyển Sinh',
+    desc: 'Chăm sóc khách hàng, quản lý phễu lead tuyển sinh & ghi danh mới',
+    badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  TEACHER: {
+    label: 'Giáo Viên Giảng Dạy',
+    desc: 'Sổ liên lạc mobile, điểm danh buổi dạy, chấm sao và đánh giá bé',
+    badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
+  },
+};
+
+const MODULE_DESCRIPTIONS: Record<string, string> = {
+  POS: 'Thu ngân, bán khóa học/học phẩm, in phiếu thu & áp voucher',
+  RECEIPTS: 'Quản lý biên lai, lịch sử giao dịch và doanh số các cơ sở',
+  ACADEMIC: 'Quản lý lớp học, lịch học, điểm danh 24 buổi & theo dõi học sinh',
+  PAYROLL: 'Bảng lương nhân sự, tính giờ dạy giáo viên & hoa hồng kinh doanh',
+  MOBILE: 'Sổ liên lạc di động cho giáo viên điểm danh, chấm sao & gửi nhận xét',
+  CRM: 'Phễu tuyển sinh, chăm sóc lead phụ huynh và lịch sử tư vấn',
+  ADMIN: 'Quản trị hệ thống, danh mục khóa học, cơ sở, thương hiệu & phân quyền',
+};
 
 const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: string; placeholderKey: string }> = {
   PAYROLL: {
@@ -114,8 +158,19 @@ const THEME_PRESETS = [
 ];
 
 export function AdminScreen() {
-  const { branding, updateBranding, resetBranding } = useBranding();
-  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'USERS' | 'BRANCHES' | 'COURSES' | 'PRODUCTS' | 'CONFIGS' | 'BRANDING'>('OVERVIEW');
+  const {
+    branding,
+    updateBranding,
+    resetBranding,
+    rolePermissions,
+    userPermissions,
+    updateRolePermissions,
+    updateUserPermissions,
+  } = useBranding();
+
+  const [activeSubTab, setActiveSubTab] = useState<
+    'OVERVIEW' | 'USERS' | 'BRANCHES' | 'COURSES' | 'PRODUCTS' | 'CONFIGS' | 'BRANDING' | 'PERMISSIONS'
+  >('OVERVIEW');
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -127,7 +182,7 @@ export function AdminScreen() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Form state for branding customization
+  // Form state for branding & module names customization
   const [brandingForm, setBrandingForm] = useState({
     systemName: branding.systemName,
     systemSlogan: branding.systemSlogan,
@@ -135,6 +190,7 @@ export function AdminScreen() {
     systemLogoText: branding.systemLogoText,
     systemPrimaryColor: branding.systemPrimaryColor,
     systemAccentColor: branding.systemAccentColor,
+    moduleNames: { ...branding.moduleNames },
   });
 
   useEffect(() => {
@@ -145,8 +201,118 @@ export function AdminScreen() {
       systemLogoText: branding.systemLogoText,
       systemPrimaryColor: branding.systemPrimaryColor,
       systemAccentColor: branding.systemAccentColor,
+      moduleNames: { ...branding.moduleNames },
     });
   }, [branding]);
+
+  // Form state for Role Permissions Matrix
+  const [rolePermsForm, setRolePermsForm] = useState<Record<string, string[]>>({ ...rolePermissions });
+
+  useEffect(() => {
+    setRolePermsForm({ ...rolePermissions });
+  }, [rolePermissions]);
+
+  // User-specific permission edit modal state
+  const [editingUserPerms, setEditingUserPerms] = useState<any | null>(null);
+  const [selectedUserModules, setSelectedUserModules] = useState<string[]>([]);
+  const [userPermSearch, setUserPermSearch] = useState('');
+  const [userPermRoleFilter, setUserPermRoleFilter] = useState('ALL');
+  const [userPermTypeFilter, setUserPermTypeFilter] = useState<'ALL' | 'CUSTOM' | 'DEFAULT'>('ALL');
+
+  const filteredPermUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchSearch =
+        !userPermSearch ||
+        u.fullName?.toLowerCase().includes(userPermSearch.toLowerCase()) ||
+        u.email?.toLowerCase().includes(userPermSearch.toLowerCase()) ||
+        u.phone?.includes(userPermSearch);
+      const matchRole = userPermRoleFilter === 'ALL' || u.role === userPermRoleFilter;
+      const isCustom = Boolean(userPermissions[u.id]);
+      const matchType =
+        userPermTypeFilter === 'ALL' ||
+        (userPermTypeFilter === 'CUSTOM' && isCustom) ||
+        (userPermTypeFilter === 'DEFAULT' && !isCustom);
+      return matchSearch && matchRole && matchType;
+    });
+  }, [users, userPermSearch, userPermRoleFilter, userPermTypeFilter, userPermissions]);
+
+  const startEditUserPerms = (user: any) => {
+    setEditingUserPerms(user);
+    const custom = userPermissions[user.id];
+    if (custom && Array.isArray(custom)) {
+      setSelectedUserModules([...custom]);
+    } else {
+      setSelectedUserModules([...(rolePermissions[user.role] || [])]);
+    }
+  };
+
+  const toggleUserModule = (moduleKey: string) => {
+    setSelectedUserModules((prev) =>
+      prev.includes(moduleKey) ? prev.filter((m) => m !== moduleKey) : [...prev, moduleKey]
+    );
+  };
+
+  const handleSaveUserPermissions = async () => {
+    if (!editingUserPerms) return;
+    try {
+      setLoading(true);
+      const ok = await updateUserPermissions(editingUserPerms.id, selectedUserModules);
+      if (ok) {
+        setMessage(`Đã cập nhật phân quyền riêng cho tài khoản "${editingUserPerms.fullName}"!`);
+        setEditingUserPerms(null);
+      } else {
+        alert('Lỗi khi lưu quyền tài khoản');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetUserToRoleDefault = async (userId: string, userName: string) => {
+    if (!confirm(`Bạn có chắc muốn xóa quyền riêng và đưa tài khoản "${userName}" về quyền mặc định của vai trò?`)) return;
+    try {
+      setLoading(true);
+      const ok = await updateUserPermissions(userId, null);
+      if (ok) {
+        setMessage(`Đã đưa tài khoản "${userName}" về quyền mặc định theo vai trò!`);
+        if (editingUserPerms?.id === userId) {
+          setEditingUserPerms(null);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleRolePermission = (role: string, moduleKey: string) => {
+    setRolePermsForm((prev) => {
+      const currentList = prev[role] || [];
+      const nextList = currentList.includes(moduleKey)
+        ? currentList.filter((m) => m !== moduleKey)
+        : [...currentList, moduleKey];
+      return { ...prev, [role]: nextList };
+    });
+  };
+
+  const handleSaveRolePermissions = async () => {
+    try {
+      setLoading(true);
+      const ok = await updateRolePermissions(rolePermsForm);
+      if (ok) {
+        setMessage('Đã lưu cấu hình ma trận phân quyền vai trò thành công!');
+      } else {
+        alert('Lỗi khi lưu phân quyền vai trò');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -173,7 +339,7 @@ export function AdminScreen() {
       setLoading(true);
       const ok = await updateBranding(brandingForm);
       if (ok) {
-        setMessage('Đã cập nhật giao diện, tên hệ thống, logo & màu sắc thành công!');
+        setMessage('Đã cập nhật giao diện, tên hệ thống, tên module & màu sắc thành công!');
       } else {
         alert('Lỗi khi lưu giao diện');
       }
@@ -785,6 +951,18 @@ export function AdminScreen() {
         >
           <Palette className="w-3.5 h-3.5" />
           <span>Giao Diện & Thương Hiệu</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('PERMISSIONS')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            activeSubTab === 'PERMISSIONS'
+              ? 'bg-indigo-600 text-white shadow'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span>Phân Quyền & Vai Trò</span>
         </button>
       </div>
 
@@ -2617,6 +2795,204 @@ export function AdminScreen() {
                 </div>
               </div>
 
+              {/* Card 4: Đổi Tên & Nhãn Các Phân Hệ Module */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      4. Đổi Tên & Nhãn Hiển Thị Các Phân Hệ (Module Names)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Hiển thị trực tiếp trên thanh Menu điều hướng</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 1: POS Bán Hàng & Thu Phí
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.POS || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, POS: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Thu Ngân POS, Bán Hàng & Thu Phí..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 2: Duyệt Chứng Từ Thu Chi
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.RECEIPTS || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, RECEIPTS: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Duyệt Chứng Từ, Kế Toán Thu Tiền..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 3: Quản Lý Đào Tạo & Giáo Vụ
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.ACADEMIC || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, ACADEMIC: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Giáo Vụ, Đào Tạo & Lớp Học..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 4: Tính Bảng Lương & KPI
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.PAYROLL || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, PAYROLL: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Bảng Lương, Tính Lương Giáo Viên..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 5: Cổng Giáo Viên & Mobile
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.MOBILE || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, MOBILE: e.target.value },
+                        })
+                      }
+                      placeholder="VD: App Giáo Viên, Cổng Giảng Dạy..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 6: Tuyển Sinh & Chăm Sóc CRM
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.CRM || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, CRM: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Tuyển Sinh CRM, Tư Vấn Khách Hàng..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Phân Hệ 7: Quản Trị Hệ Thống (Admin)
+                    </label>
+                    <input
+                      type="text"
+                      value={brandingForm.moduleNames?.ADMIN || ''}
+                      onChange={(e) =>
+                        setBrandingForm({
+                          ...brandingForm,
+                          moduleNames: { ...brandingForm.moduleNames, ADMIN: e.target.value },
+                        })
+                      }
+                      placeholder="VD: Quản Trị, Cài Đặt Trung Tâm..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick preset template buttons */}
+                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Gợi ý mẫu:</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBrandingForm({
+                        ...brandingForm,
+                        moduleNames: { ...DEFAULT_MODULE_NAMES },
+                      })
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    Mặc Định Chuẩn EMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBrandingForm({
+                        ...brandingForm,
+                        moduleNames: {
+                          POS: 'Bán Hóa Đơn & Thu Phí',
+                          RECEIPTS: 'Kiểm Soát Phiếu Thu',
+                          ACADEMIC: 'Học Vụ & Điểm Danh',
+                          PAYROLL: 'Lương & Thưởng KPI',
+                          MOBILE: 'Sổ Liên Lạc Giáo Viên',
+                          CRM: 'Tuyển Sinh & Học Thử',
+                          ADMIN: 'Cài Đặt Trung Tâm',
+                        },
+                      })
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    Mẫu Trung Tâm Toán Trí Tuệ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBrandingForm({
+                        ...brandingForm,
+                        moduleNames: {
+                          POS: 'Thu Học Phí & Giáo Cụ',
+                          RECEIPTS: 'Thủ Quỹ & Kế Toán',
+                          ACADEMIC: 'Quản Lý Lớp & Bé',
+                          PAYROLL: 'Lương & Phụ Cấp Cô',
+                          MOBILE: 'Cổng Giáo Viên Mầm Non',
+                          CRM: 'Đăng Ký & Tư Vấn Phụ Huynh',
+                          ADMIN: 'Ban Giám Hiệu',
+                        },
+                      })
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    Mẫu Trường Kỹ Năng / Mầm Non
+                  </button>
+                </div>
+              </div>
+
               {/* Submit Button */}
               <div className="pt-2 flex justify-end">
                 <button
@@ -2790,6 +3166,453 @@ export function AdminScreen() {
               </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Subtab 8: Permissions & Roles Matrix */}
+      {activeSubTab === 'PERMISSIONS' && (
+        <div className="space-y-6">
+          {/* Header Description Banner */}
+          <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 p-6 rounded-2xl text-white shadow-md relative overflow-hidden">
+            <div className="relative z-10 max-w-3xl space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Hệ Thống Phân Quyền Vai Trò & Cấp Quyền Tài Khoản (RBAC)</span>
+              </div>
+              <h2 className="text-xl font-black tracking-tight">
+                Phân Quyền Theo Vai Trò & Phân Quyền Riêng Từng Nhân Sự
+              </h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Hệ thống hỗ trợ 2 tầng phân quyền: <strong>(1) Ma trận theo vai trò</strong> (áp dụng tự động cho nhân sự theo chức vụ) và <strong>(2) Cấp quyền riêng từng tài khoản</strong> (cho phép bổ sung hoặc rút bớt module đối với từng nhân sự cụ thể mà không làm ảnh hưởng các tài khoản khác).
+              </p>
+            </div>
+          </div>
+
+          {/* SECTION 1: ROLE MATRIX */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-indigo-600" />
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                    1. Ma Trận Phân Quyền Theo Vai Trò (Role-Based Access)
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Chọn các phân hệ được phép truy cập mặc định cho 5 nhóm vai trò trong hệ sinh thái.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveRolePermissions}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Lưu Ma Trận Quyền Vai Trò</span>
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold">
+                    <th className="p-3.5 min-w-[200px]">Vai Trò Hệ Thống</th>
+                    <th className="p-3.5 min-w-[240px]">Mô Tả & Trách Nhiệm</th>
+                    {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => (
+                      <th key={modKey} className="p-3.5 text-center min-w-[120px]">
+                        <div className="font-bold text-slate-900">
+                          {branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey]}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 font-normal mt-0.5">[{modKey}]</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {Object.keys(SYSTEM_ROLES_INFO).map((roleKey) => {
+                    const info = SYSTEM_ROLES_INFO[roleKey];
+                    const isAdmin = roleKey === 'ADMIN';
+                    const activeModules = isAdmin
+                      ? ALL_MODULE_KEYS
+                      : rolePermsForm[roleKey] || [];
+
+                    return (
+                      <tr key={roleKey} className="hover:bg-slate-50/70 transition">
+                        <td className="p-3.5 font-semibold">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${info.badgeColor}`}>
+                              {roleKey}
+                            </span>
+                            <span className="text-slate-800 text-xs font-bold">{info.label}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-slate-500 text-[11px] leading-relaxed">
+                          {info.desc}
+                        </td>
+                        {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => {
+                          const isChecked = activeModules.includes(modKey);
+
+                          if (isAdmin) {
+                            return (
+                              <td key={modKey} className="p-3.5 text-center">
+                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 font-black shadow-sm" title="Quản trị viên luôn có toàn quyền">
+                                  ✓
+                                </span>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={modKey} className="p-3.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleRolePermission(roleKey, modKey)}
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-xl transition cursor-pointer ${
+                                  isChecked
+                                    ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300 scale-105'
+                                    : 'bg-slate-100 text-slate-300 hover:bg-slate-200 hover:text-slate-500'
+                                }`}
+                                title={`${isChecked ? 'Đang cấp quyền' : 'Không có quyền'}: ${branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey]}`}
+                              >
+                                {isChecked ? <Check className="w-4 h-4 font-black" /> : <span className="text-xs font-bold">−</span>}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 bg-amber-50/60 border-t border-amber-100 text-[11px] text-amber-900 flex items-center justify-between">
+              <span>
+                💡 <strong>Ghi chú:</strong> Tài khoản vai trò ADMIN luôn có toàn quyền tất cả phân hệ để tránh trường hợp bị khóa nhầm tài khoản quản trị.
+              </span>
+              <span className="text-slate-500 font-medium">Đã tải cấu hình từ máy chủ</span>
+            </div>
+          </div>
+
+          {/* SECTION 2: USER OVERRIDES */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-purple-600" />
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                    2. Danh Sách Nhân Sự & Cấp Quyền Riêng (User Overrides)
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Tuỳ biến cấp thêm hoặc khóa bớt module cho từng nhân viên cụ thể theo yêu cầu công việc.
+                </p>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={userPermSearch}
+                    onChange={(e) => setUserPermSearch(e.target.value)}
+                    placeholder="Tìm tên, email, sđt..."
+                    className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+                  />
+                </div>
+
+                <select
+                  value={userPermRoleFilter}
+                  onChange={(e) => setUserPermRoleFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">Tất cả vai trò</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="ACCOUNTANT">ACCOUNTANT</option>
+                  <option value="ACADEMIC_AFFAIRS">ACADEMIC_AFFAIRS</option>
+                  <option value="SALE">SALE</option>
+                  <option value="TEACHER">TEACHER</option>
+                </select>
+
+                <select
+                  value={userPermTypeFilter}
+                  onChange={(e) => setUserPermTypeFilter(e.target.value as any)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="CUSTOM">Chỉ có quyền riêng</option>
+                  <option value="DEFAULT">Theo chuẩn vai trò</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Users Permissions Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+                    <th className="p-3">Nhân Sự</th>
+                    <th className="p-3">Cơ Sở</th>
+                    <th className="p-3">Vai Trò</th>
+                    <th className="p-3">Trạng Thái Quyền</th>
+                    <th className="p-3 min-w-[220px]">Phân Hệ Được Phép</th>
+                    <th className="p-3 text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPermUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        Không tìm thấy nhân sự phù hợp với bộ lọc tìm kiếm.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPermUsers.map((u) => {
+                      const hasCustom = Boolean(userPermissions[u.id]);
+                      const roleDefault = rolePermissions[u.role] || [];
+                      const effectiveModules = u.role === 'ADMIN'
+                        ? ALL_MODULE_KEYS
+                        : (hasCustom ? userPermissions[u.id] : roleDefault);
+                      const branchObj = branches.find((b) => b.id === u.branchId);
+
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                          <td className="p-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white font-bold flex items-center justify-center text-xs shadow-sm shrink-0">
+                                {u.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800">{u.fullName}</div>
+                                <div className="text-[11px] text-slate-400">{u.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 text-slate-600 text-xs">
+                            {branchObj?.name || 'Tất cả cơ sở'}
+                          </td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${SYSTEM_ROLES_INFO[u.role]?.badgeColor || 'bg-slate-100 text-slate-700'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {u.role === 'ADMIN' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
+                                <ShieldCheck className="w-3 h-3" />
+                                Toàn Quyền Admin
+                              </span>
+                            ) : hasCustom ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                                <Sparkles className="w-3 h-3 text-indigo-500" />
+                                Quyền Riêng ({userPermissions[u.id]?.length || 0} module)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium">
+                                Theo vai trò ({roleDefault.length} module)
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap gap-1">
+                              {effectiveModules.map((mKey: string) => (
+                                <span
+                                  key={mKey}
+                                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                                >
+                                  {branding.moduleNames?.[mKey] || DEFAULT_MODULE_NAMES[mKey]}
+                                </span>
+                              ))}
+                              {effectiveModules.length === 0 && (
+                                <span className="text-[11px] text-rose-500 italic">Không có quyền module nào</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditUserPerms(u)}
+                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                title="Chỉnh sửa phân quyền riêng cho tài khoản"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Phân quyền riêng</span>
+                              </button>
+
+                              {hasCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetUserToRoleDefault(u.id, u.fullName)}
+                                  className="px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                  title="Xoá quyền riêng và trở về mặc định theo vai trò"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Về mặc định</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT USER PERMISSIONS */}
+      {editingUserPerms && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-md">
+                  {editingUserPerms.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    Phân Quyền Riêng: {editingUserPerms.fullName}
+                  </h3>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                    <span>{editingUserPerms.email}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-indigo-600">Vai trò: {editingUserPerms.role}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingUserPerms(null)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 flex items-center justify-center text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Presets and Quick Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-indigo-50/70 border border-indigo-100">
+                <span className="text-xs font-semibold text-indigo-950">Phím Tắt Nhanh:</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserModules([...ALL_MODULE_KEYS])}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold transition"
+                  >
+                    Chọn tất cả (7)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserModules([...(rolePermissions[editingUserPerms.role] || [])])}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold transition"
+                  >
+                    Nạp từ chuẩn vai trò ({editingUserPerms.role})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserModules([])}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 text-xs font-semibold transition"
+                  >
+                    Bỏ chọn hết
+                  </button>
+                </div>
+              </div>
+
+              {/* Module Checkbox Cards */}
+              <div className="space-y-2.5">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Chọn Phân Hệ Cho Phép Tài Khoản Này Truy Cập ({selectedUserModules.length}/7):
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => {
+                    const isChecked = selectedUserModules.includes(modKey);
+                    const modName = branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey];
+                    const modDesc = MODULE_DESCRIPTIONS[modKey];
+
+                    return (
+                      <div
+                        key={modKey}
+                        onClick={() => toggleUserModule(modKey)}
+                        className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 select-none ${
+                          isChecked
+                            ? 'border-indigo-500 bg-indigo-50/60 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 transition ${
+                            isChecked
+                              ? 'bg-indigo-600 text-white font-bold'
+                              : 'border border-slate-300 bg-white'
+                          }`}
+                        >
+                          {isChecked && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900 truncate">{modName}</span>
+                            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {modKey}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                            {modDesc}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              {userPermissions[editingUserPerms.id] ? (
+                <button
+                  type="button"
+                  onClick={() => handleResetUserToRoleDefault(editingUserPerms.id, editingUserPerms.fullName)}
+                  disabled={loading}
+                  className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Xoá quyền riêng (Về mặc định vai trò)</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingUserPerms(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveUserPermissions}
+                  disabled={loading}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Lưu Phân Quyền Riêng</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

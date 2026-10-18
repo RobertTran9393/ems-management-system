@@ -100,7 +100,25 @@ coreRouter.post('/configs/seed-defaults', async (req: Request, res: Response) =>
   }
 });
 
-// 3.2 Get System Branding & Appearance
+const DEFAULT_MODULE_NAMES: Record<string, string> = {
+  POS: 'Thu Ngân POS',
+  RECEIPTS: 'Duyệt Chứng Từ',
+  ACADEMIC: 'Giáo Vụ',
+  PAYROLL: 'Bảng Lương',
+  MOBILE: 'App Giáo Viên',
+  CRM: 'Tuyển Sinh CRM',
+  ADMIN: 'Quản Trị',
+};
+
+const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  ADMIN: ['ADMIN', 'POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM'],
+  ACCOUNTANT: ['POS', 'RECEIPTS', 'PAYROLL'],
+  ACADEMIC_AFFAIRS: ['ACADEMIC', 'CRM'],
+  SALE: ['CRM', 'POS'],
+  TEACHER: ['MOBILE'],
+};
+
+// 3.2 Get System Branding & Appearance (including Module Names)
 coreRouter.get('/branding', async (req: Request, res: Response) => {
   try {
     const brandingKeys = [
@@ -110,17 +128,19 @@ coreRouter.get('/branding', async (req: Request, res: Response) => {
       'SYSTEM_LOGO_TEXT',
       'SYSTEM_PRIMARY_COLOR',
       'SYSTEM_ACCENT_COLOR',
+      'SYSTEM_MODULE_NAMES',
     ];
     const configs = await prisma.systemConfig.findMany({
       where: { key: { in: brandingKeys } },
     });
-    const result: Record<string, string> = {
+    const result: any = {
       systemName: 'EMS SBR',
       systemSlogan: 'Toán Trí Tuệ & Kỹ Năng Sống • SRS v2.0',
       systemLogoUrl: '',
       systemLogoText: 'SBR',
       systemPrimaryColor: '#4f46e5',
       systemAccentColor: '#2563eb',
+      moduleNames: { ...DEFAULT_MODULE_NAMES },
     };
     configs.forEach((c) => {
       if (c.key === 'SYSTEM_NAME') result.systemName = c.value;
@@ -129,6 +149,11 @@ coreRouter.get('/branding', async (req: Request, res: Response) => {
       if (c.key === 'SYSTEM_LOGO_TEXT') result.systemLogoText = c.value;
       if (c.key === 'SYSTEM_PRIMARY_COLOR') result.systemPrimaryColor = c.value;
       if (c.key === 'SYSTEM_ACCENT_COLOR') result.systemAccentColor = c.value;
+      if (c.key === 'SYSTEM_MODULE_NAMES') {
+        try {
+          result.moduleNames = { ...DEFAULT_MODULE_NAMES, ...JSON.parse(c.value) };
+        } catch (e) {}
+      }
     });
     return res.json({ success: true, data: result });
   } catch (error: any) {
@@ -136,7 +161,7 @@ coreRouter.get('/branding', async (req: Request, res: Response) => {
   }
 });
 
-// 3.3 Update System Branding & Appearance
+// 3.3 Update System Branding & Appearance (including Module Names)
 coreRouter.put('/branding', async (req: Request, res: Response) => {
   try {
     const {
@@ -146,9 +171,10 @@ coreRouter.put('/branding', async (req: Request, res: Response) => {
       systemLogoText,
       systemPrimaryColor,
       systemAccentColor,
+      moduleNames,
     } = req.body;
 
-    const items = [
+    const items: { key: string; value: string; desc: string }[] = [
       { key: 'SYSTEM_NAME', value: systemName !== undefined ? String(systemName) : 'EMS SBR', desc: 'Tên hệ thống trung tâm' },
       { key: 'SYSTEM_SLOGAN', value: systemSlogan !== undefined ? String(systemSlogan) : '', desc: 'Khẩu hiệu hệ thống' },
       { key: 'SYSTEM_LOGO_URL', value: systemLogoUrl !== undefined ? String(systemLogoUrl) : '', desc: 'URL logo hình ảnh' },
@@ -156,6 +182,14 @@ coreRouter.put('/branding', async (req: Request, res: Response) => {
       { key: 'SYSTEM_PRIMARY_COLOR', value: systemPrimaryColor !== undefined ? String(systemPrimaryColor) : '#4f46e5', desc: 'Màu sắc chủ đạo giao diện' },
       { key: 'SYSTEM_ACCENT_COLOR', value: systemAccentColor !== undefined ? String(systemAccentColor) : '#2563eb', desc: 'Màu phụ trợ giao diện' },
     ];
+
+    if (moduleNames && typeof moduleNames === 'object') {
+      items.push({
+        key: 'SYSTEM_MODULE_NAMES',
+        value: JSON.stringify(moduleNames),
+        desc: 'Tùy biến tên các phân hệ module trên thanh điều hướng',
+      });
+    }
 
     for (const item of items) {
       await prisma.systemConfig.upsert({
@@ -166,6 +200,90 @@ coreRouter.put('/branding', async (req: Request, res: Response) => {
     }
 
     return res.json({ success: true, message: 'Cập nhật giao diện & thương hiệu hệ thống thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 3.4 Get System Permissions (Phân quyền vai trò & tài khoản)
+coreRouter.get('/permissions', async (req: Request, res: Response) => {
+  try {
+    const configs = await prisma.systemConfig.findMany({
+      where: { key: { in: ['SYSTEM_ROLE_PERMISSIONS', 'SYSTEM_USER_PERMISSIONS'] } },
+    });
+
+    let rolePermissions = { ...DEFAULT_ROLE_PERMISSIONS };
+    let userPermissions: Record<string, string[]> = {};
+
+    configs.forEach((c) => {
+      if (c.key === 'SYSTEM_ROLE_PERMISSIONS') {
+        try {
+          rolePermissions = { ...DEFAULT_ROLE_PERMISSIONS, ...JSON.parse(c.value) };
+        } catch (e) {}
+      }
+      if (c.key === 'SYSTEM_USER_PERMISSIONS') {
+        try {
+          userPermissions = JSON.parse(c.value);
+        } catch (e) {}
+      }
+    });
+
+    return res.json({ success: true, data: { rolePermissions, userPermissions, defaultModules: DEFAULT_MODULE_NAMES } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 3.5 Update Role Permissions Matrix (Cập nhật ma trận phân quyền vai trò)
+coreRouter.put('/permissions/roles', async (req: Request, res: Response) => {
+  try {
+    const { rolePermissions } = req.body;
+    if (!rolePermissions || typeof rolePermissions !== 'object') {
+      return res.status(400).json({ success: false, message: 'Dữ liệu phân quyền vai trò không hợp lệ' });
+    }
+
+    await prisma.systemConfig.upsert({
+      where: { key: 'SYSTEM_ROLE_PERMISSIONS' },
+      update: { value: JSON.stringify(rolePermissions), category: 'PERMISSIONS', description: 'Ma trận phân quyền theo vai trò' },
+      create: { key: 'SYSTEM_ROLE_PERMISSIONS', value: JSON.stringify(rolePermissions), category: 'PERMISSIONS', description: 'Ma trận phân quyền theo vai trò' },
+    });
+
+    return res.json({ success: true, message: 'Cập nhật phân quyền theo vai trò thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 3.6 Update User Specific Permissions (Cấp quyền chi tiết cho từng tài khoản)
+coreRouter.put('/permissions/users/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { modules } = req.body; // array of module keys or null to reset to role default
+
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'SYSTEM_USER_PERMISSIONS' },
+    });
+
+    let userPermissions: Record<string, string[]> = {};
+    if (config) {
+      try {
+        userPermissions = JSON.parse(config.value);
+      } catch (e) {}
+    }
+
+    if (modules === null || modules === undefined) {
+      delete userPermissions[userId];
+    } else if (Array.isArray(modules)) {
+      userPermissions[userId] = modules;
+    }
+
+    await prisma.systemConfig.upsert({
+      where: { key: 'SYSTEM_USER_PERMISSIONS' },
+      update: { value: JSON.stringify(userPermissions), category: 'PERMISSIONS', description: 'Cấp quyền tùy biến riêng cho tài khoản người dùng' },
+      create: { key: 'SYSTEM_USER_PERMISSIONS', value: JSON.stringify(userPermissions), category: 'PERMISSIONS', description: 'Cấp quyền tùy biến riêng cho tài khoản người dùng' },
+    });
+
+    return res.json({ success: true, message: 'Cập nhật quyền tài khoản thành công', data: userPermissions[userId] });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
