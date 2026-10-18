@@ -634,33 +634,76 @@ export function AdminScreen() {
       {activeSubTab === 'CONFIGS' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-            <h2 className="text-sm font-bold text-slate-800">Cấu Hình Tham Số Nghiệp Vụ Cốt Lõi (SRS v2.0)</h2>
-            <span className="text-xs text-slate-500">Toàn bộ thay đổi áp dụng tức thì vào công thức tính</span>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Cấu Hình Tham Số Nghiệp Vụ Cốt Lõi (SRS v2.0)</h2>
+              <span className="text-xs text-slate-500">Toàn bộ thay đổi áp dụng tức thì vào công thức tính bảng lương & đào tạo</span>
+            </div>
+            {configs.length === 0 && (
+              <button
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    const defaultConfigs = [
+                      { key: 'NEW_STUDENT_BONUS', value: '200000', description: 'Định mức thưởng Học viên Mới cho Giáo viên/Sale' },
+                      { key: 'ON_TIME_LEVELUP_BONUS', value: '300000', description: 'Định mức thưởng HV Lên khoá Đúng hạn 3 tháng' },
+                      { key: 'STANDARD_MONTHS', value: '3', description: 'Hạn chuẩn hoàn thành khoá học (tháng)' },
+                      { key: 'MAX_MONTHS', value: '4', description: 'Hạn tối đa hoàn thành khoá học (tháng)' },
+                      { key: 'MAX_RESERVATION_DAYS', value: '90', description: 'Thời gian bảo lưu tối đa (ngày)' },
+                    ];
+                    for (const c of defaultConfigs) {
+                      await fetch(`${API_BASE_URL}/api/core/configs/${c.key}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(c),
+                      });
+                    }
+                    setMessage('Đã khởi tạo bộ 5 tham số cấu hình mặc định thành công!');
+                    fetchData();
+                  } catch (e: any) {
+                    alert(e.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nạp 5 Cấu Hình Mặc Định</span>
+              </button>
+            )}
           </div>
 
           <div className="divide-y divide-slate-100">
-            {configs.map((cfg) => (
-              <div key={cfg.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="font-mono text-xs font-bold text-indigo-700">{cfg.key}</div>
-                  <div className="text-xs text-slate-600 mt-0.5">{cfg.description}</div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    defaultValue={cfg.value}
-                    onBlur={(e) => {
-                      if (e.target.value !== cfg.value) {
-                        handleUpdateConfig(cfg.key, e.target.value);
-                      }
-                    }}
-                    className="w-36 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <span className="text-[11px] text-slate-400">Tự lưu khi rời chuột</span>
-                </div>
+            {configs.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                <Sliders className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-slate-700">Chưa có tham số cấu hình nào trong cơ sở dữ liệu đám mây</p>
+                <p className="text-[11px] text-slate-400 mt-1">Bấm nút "Nạp 5 Cấu Hình Mặc Định" ở góc trên bên phải để nạp ngay các định mức KPI và hạn bảo lưu.</p>
               </div>
-            ))}
+            ) : (
+              configs.map((cfg) => (
+                <div key={cfg.id || cfg.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="font-mono text-xs font-bold text-indigo-700">{cfg.key}</div>
+                    <div className="text-xs text-slate-600 mt-0.5">{cfg.description}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      defaultValue={cfg.value}
+                      onBlur={(e) => {
+                        if (e.target.value !== cfg.value) {
+                          handleUpdateConfig(cfg.key, e.target.value);
+                        }
+                      }}
+                      className="w-40 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500"
+                    />
+                    <span className="text-[11px] text-slate-400">Rời chuột để lưu</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
