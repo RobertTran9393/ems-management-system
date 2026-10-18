@@ -129,11 +129,12 @@ const detectConfigDomain = (cfg: { key: string; category?: string | null }): str
   if (cfg.category && BUSINESS_DOMAINS[cfg.category]) {
     return cfg.category;
   }
-  if (cfg.key.startsWith('SYSTEM_ROLE') || cfg.key.startsWith('SYSTEM_USER')) return 'PERMISSIONS';
-  if (cfg.key.startsWith('SYSTEM_')) return 'BRANDING';
-  if (cfg.key.includes('BONUS') || cfg.key.includes('SALARY') || cfg.key.includes('ALLOWANCE')) return 'PAYROLL';
-  if (cfg.key.includes('MONTHS') || cfg.key.includes('RESERVATION') || cfg.key.includes('DEADLINE')) return 'ACADEMIC';
-  if (cfg.key.includes('FEE') || cfg.key.includes('PRICE') || cfg.key.includes('DISCOUNT')) return 'POS';
+  const k = (cfg.key || '').toUpperCase();
+  if (k.startsWith('SYSTEM_ROLE') || k.startsWith('SYSTEM_USER')) return 'PERMISSIONS';
+  if (k.startsWith('SYSTEM_') || k.includes('LOGO') || k.includes('BRAND') || k.includes('COLOR') || k.includes('SLOGAN')) return 'BRANDING';
+  if (k.includes('BONUS') || k.includes('SALARY') || k.includes('ALLOWANCE') || k.includes('COMMISSION') || k.includes('RATE') || k.includes('KPI') || k.includes('THUONG')) return 'PAYROLL';
+  if (k.includes('MONTHS') || k.includes('RESERVATION') || k.includes('DEADLINE') || k.includes('SESSION') || k.includes('CLASS') || k.includes('ATTENDANCE') || k.includes('BUOI')) return 'ACADEMIC';
+  if (k.includes('FEE') || k.includes('PRICE') || k.includes('DISCOUNT') || k.includes('VOUCHER') || k.includes('TAX') || k.includes('HOC_PHI')) return 'POS';
   return 'GENERAL';
 };
 
@@ -2820,6 +2821,8 @@ export function AdminScreen() {
                   <option value="PAYROLL">💰 Bảng Lương & KPI</option>
                   <option value="ACADEMIC">📚 Đào Tạo & Giáo Vụ</option>
                   <option value="POS">💳 POS & Học Phí</option>
+                  <option value="BRANDING">🎨 Thương Hiệu & Giao Diện</option>
+                  <option value="PERMISSIONS">🛡️ Phân Quyền Hệ Thống</option>
                   <option value="GENERAL">⚙️ Quản Trị & Khác</option>
                 </select>
                 <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
@@ -2837,7 +2840,15 @@ export function AdminScreen() {
                   required
                   placeholder={BUSINESS_DOMAINS[newConfig.category]?.placeholderKey || 'VD: MA_THAM_SO'}
                   value={newConfig.key}
-                  onChange={(e) => setNewConfig({ ...newConfig, key: e.target.value })}
+                  onChange={(e) => {
+                    const rawKey = e.target.value.toUpperCase();
+                    const detected = detectConfigDomain({ key: rawKey });
+                    setNewConfig((prev) => ({
+                      ...prev,
+                      key: rawKey,
+                      category: detected !== 'GENERAL' ? detected : prev.category,
+                    }));
+                  }}
                   className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono font-semibold uppercase focus:outline-none focus:border-indigo-600 shadow-sm"
                 />
               </div>
