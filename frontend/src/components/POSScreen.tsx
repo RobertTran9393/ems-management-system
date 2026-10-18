@@ -22,6 +22,7 @@ export const POSScreen: React.FC = () => {
   const [paymentMode, setPaymentMode] = useState<'FULL' | 'INSTALLMENTS'>('INSTALLMENTS');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'VIETQR'>('CASH'); // CASH or VIETQR
   const [cashierName, setCashierName] = useState<string>('Thu ngân tại quầy');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [customerGivenAmount, setCustomerGivenAmount] = useState<number>(0);
 
   const [installment1Amount, setInstallment1Amount] = useState<number>(0);
@@ -38,6 +39,16 @@ export const POSScreen: React.FC = () => {
 
   useEffect(() => {
     fetchInitialData();
+    const saved = localStorage.getItem('ems_user');
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        setCurrentUser(u);
+        if (u.fullName) {
+          setCashierName(u.fullName);
+        }
+      } catch (e) {}
+    }
   }, []);
 
   const fetchInitialData = async () => {
@@ -177,7 +188,8 @@ export const POSScreen: React.FC = () => {
           discountAmount,
           installments: installmentsPayload,
           initialPaymentMethod: paymentMethod,
-          cashierName,
+          cashierName: cashierName || currentUser?.fullName || 'Thu ngân tại quầy',
+          createdById: currentUser?.id || undefined,
         }),
       });
 

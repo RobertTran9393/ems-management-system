@@ -424,6 +424,8 @@ posRouter.post('/checkout', async (req: Request, res: Response) => {
       proofImageUrl,
       proofNote,
       transactionRef,
+      createdById,
+      cashierName,
     } = req.body;
 
     let targetStudentId = existingStudentId;
@@ -525,7 +527,7 @@ posRouter.post('/checkout', async (req: Request, res: Response) => {
     let initialPaid = 0;
     const installmentsData: any[] = [];
     const isCashPayment = req.body.initialPaymentMethod === 'CASH';
-    const cashierName = req.body.cashierName || 'Thu ngân tại quầy';
+    const effectiveCashierName = cashierName || req.body.cashierName || 'Thu ngân tại quầy';
     const cashReceiptNo = `PT-${Date.now().toString().slice(-8)}`;
 
     if (Array.isArray(installments) && installments.length > 0) {
@@ -546,9 +548,9 @@ posRouter.post('/checkout', async (req: Request, res: Response) => {
           paymentMethod: isPaid ? (isCashPayment && isInst1 ? PaymentMethod.CASH : (inst.paymentMethod || PaymentMethod.BANK_TRANSFER)) : null,
           qrCodeString: qrString,
           proofImageUrl: isInst1 && !isCashPayment ? proofImageUrl : null,
-          proofNote: isCashPayment && isInst1 ? `Thu tiền mặt tại quầy bởi ${cashierName}` : (isInst1 ? proofNote : null),
+          proofNote: isCashPayment && isInst1 ? `Thu tiền mặt tại quầy bởi ${effectiveCashierName}` : (isInst1 ? proofNote : null),
           transactionRef: isCashPayment && isInst1 ? cashReceiptNo : (isInst1 ? transactionRef : null),
-          confirmedBy: isCashPayment && isInst1 ? cashierName : null,
+          confirmedBy: isCashPayment && isInst1 ? effectiveCashierName : null,
           status: isPaid ? InstallmentStatus.PAID : InstallmentStatus.PENDING,
         });
       }
@@ -567,9 +569,9 @@ posRouter.post('/checkout', async (req: Request, res: Response) => {
         paymentMethod: isCashPayment ? PaymentMethod.CASH : PaymentMethod.BANK_TRANSFER,
         qrCodeString: qrString,
         proofImageUrl: isCashPayment ? null : proofImageUrl,
-        proofNote: isCashPayment ? `Thu tiền mặt 100% tại quầy bởi ${cashierName}` : proofNote,
+        proofNote: isCashPayment ? `Thu tiền mặt 100% tại quầy bởi ${effectiveCashierName}` : proofNote,
         transactionRef: isCashPayment ? cashReceiptNo : transactionRef,
-        confirmedBy: isCashPayment ? cashierName : null,
+        confirmedBy: isCashPayment ? effectiveCashierName : null,
         status: isPaid ? InstallmentStatus.PAID : InstallmentStatus.PENDING,
       });
     }
@@ -583,6 +585,8 @@ posRouter.post('/checkout', async (req: Request, res: Response) => {
           orderCode,
           studentId: targetStudentId,
           branchId,
+          createdById: createdById || null,
+          cashierName: effectiveCashierName,
           totalTuitionFee,
           totalProductFee,
           discountAmount: Number(discountAmount),

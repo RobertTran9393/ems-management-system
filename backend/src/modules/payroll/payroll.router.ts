@@ -121,19 +121,6 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
           workingSalary = Math.round(totalTeachingHours * Number(staff.hourlyTeachingRate));
         }
 
-        // Teacher KPI 1: New Student Count
-        const newEnrollments = await prisma.enrollment.findMany({
-          where: {
-            assignedTeacherId: staff.id,
-            createdAt: {
-              gte: new Date(y, m - 1, 1),
-              lt: new Date(y, m, 1),
-            },
-          },
-        });
-        newStudentCount = newEnrollments.length;
-        newStudentBonusAmount = newStudentCount * newStudentBonusUnit;
-
         // Teacher KPI 2: On-time Level up count
         const onTimeEnrollments = await prisma.enrollment.findMany({
           where: {
@@ -172,9 +159,50 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
           const hourlyRate = Number(staff.hourlyTeachingRate) || Math.round(Number(staff.baseSalary) / stdHours);
           workingSalary = Math.round(recordedHours * hourlyRate);
         }
+      }
 
-        // Sale KPI: Converted leads
-        if (staff.role === 'SALE') {
+      // 1.c Tính thưởng học viên mới (NEW_STUDENT_BONUS):
+      // Thưởng trực tiếp cho người dùng đăng nhập tạo thành công phiếu thu / đơn hàng đăng ký khoá học và hoàn tất thanh toán
+      const paidOrders = await prisma.order.findMany({
+        where: {
+          OR: [
+            { createdById: staff.id },
+            { cashierName: staff.fullName },
+            { installments: { some: { confirmedBy: staff.id } } },
+            { installments: { some: { confirmedBy: staff.fullName } } },
+          ],
+          createdAt: {
+            gte: new Date(y, m - 1, 1),
+            lt: new Date(y, m, 1),
+          },
+          items: {
+            some: {
+              itemType: { in: ['COURSE', 'COMBO'] },
+            },
+          },
+          paidAmount: { gt: 0 },
+        },
+        select: { studentId: true },
+      });
+
+      const uniqueStudentsFromOrders = new Set(paidOrders.map((o) => o.studentId).filter(Boolean));
+      newStudentCount = uniqueStudentsFromOrders.size;
+
+      // Fallback cho dữ liệu cũ (nếu chưa có đơn qua POS gắn người tạo)
+      if (newStudentCount === 0) {
+        if (staff.role === 'TEACHER') {
+          const newEnrollments = await prisma.enrollment.findMany({
+            where: {
+              assignedTeacherId: staff.id,
+              createdAt: {
+                gte: new Date(y, m - 1, 1),
+                lt: new Date(y, m, 1),
+              },
+            },
+            select: { studentId: true },
+          });
+          newStudentCount = new Set(newEnrollments.map((e) => e.studentId)).size;
+        } else if (staff.role === 'SALE') {
           const convertedLeads = await prisma.lead.count({
             where: {
               assignedUserId: staff.id,
@@ -186,9 +214,10 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
             },
           });
           newStudentCount = convertedLeads;
-          newStudentBonusAmount = newStudentCount * newStudentBonusUnit;
         }
       }
+
+      newStudentBonusAmount = newStudentCount * newStudentBonusUnit;
 
       // 2. Calculate Allowances (Fixed Allowance + Dynamic SystemConfig Allowances)
       let totalAllowances = 0;
