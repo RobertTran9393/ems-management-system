@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL } from '../config/api';
 import {
   ShieldCheck,
@@ -22,7 +22,14 @@ import {
   Layers,
   Boxes,
   Coins,
-  Edit3
+  Edit3,
+  Gift,
+  Percent,
+  Sparkles,
+  Calculator,
+  CheckSquare,
+  Square,
+  AlertCircle
 } from 'lucide-react';
 
 const BUSINESS_DOMAINS: Record<string, { label: string; color: string; desc: string; placeholderKey: string }> = {
@@ -106,6 +113,37 @@ export function AdminScreen() {
     standardMonths: 3,
     maxMonths: 4,
   });
+
+  // Course view filter: Tất cả, Khóa học đơn, hoặc Gói combo
+  const [courseViewFilter, setCourseViewFilter] = useState<'ALL' | 'SINGLE' | 'COMBOS'>('ALL');
+
+  // Form state for creating course combo
+  const [newCombo, setNewCombo] = useState({
+    comboCode: '',
+    name: '',
+    discountType: 'PERCENT' as 'PERCENT' | 'AMOUNT',
+    discountValue: 10,
+  });
+  const [selectedComboCourseIds, setSelectedComboCourseIds] = useState<string[]>([]);
+
+  // Calculated prices for combo package
+  const calculatedOriginalPrice = useMemo(() => {
+    return selectedComboCourseIds.reduce((sum, cId) => {
+      const c = courses.find((item) => item.id === cId);
+      return sum + (c ? Number(c.tuitionFee || 0) : 0);
+    }, 0);
+  }, [selectedComboCourseIds, courses]);
+
+  const calculatedDiscountAmount = useMemo(() => {
+    if (newCombo.discountType === 'PERCENT') {
+      return Math.round((calculatedOriginalPrice * Number(newCombo.discountValue || 0)) / 100);
+    }
+    return Math.min(calculatedOriginalPrice, Number(newCombo.discountValue || 0));
+  }, [calculatedOriginalPrice, newCombo.discountType, newCombo.discountValue]);
+
+  const calculatedComboPrice = useMemo(() => {
+    return Math.max(0, calculatedOriginalPrice - calculatedDiscountAmount);
+  }, [calculatedOriginalPrice, calculatedDiscountAmount]);
 
   // Form state for creating product
   const [newProduct, setNewProduct] = useState({
@@ -335,6 +373,90 @@ export function AdminScreen() {
     }
   };
 
+  // Combo Handlers
+  const toggleCourseInCombo = (courseId: string) => {
+    setSelectedComboCourseIds((prev) => {
+      const next = prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId];
+      if (next.length >= 2 && !newCombo.name) {
+        const selected = courses.filter((c) => next.includes(c.id));
+        const autoName = `Combo ${next.length} Khóa: ${selected.map((c) => c.courseCode).join(' + ')}`;
+        const autoCode = `COMBO-${next.length}LV-${Date.now().toString().slice(-4)}`;
+        setNewCombo((curr) => ({
+          ...curr,
+          name: curr.name || autoName,
+          comboCode: curr.comboCode || autoCode,
+        }));
+      }
+      return next;
+    });
+  };
+
+  const handleCreateCombo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedComboCourseIds.length < 2) {
+      alert('Vui lòng chọn ít nhất 2 khóa học để tạo gói combo!');
+      return;
+    }
+    if (!newCombo.name.trim() || !newCombo.comboCode.trim()) {
+      alert('Vui lòng nhập đầy đủ Mã Gói và Tên Gói Combo!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/catalog/combos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comboCode: newCombo.comboCode.trim().toUpperCase(),
+          name: newCombo.name.trim(),
+          totalCourses: selectedComboCourseIds.length,
+          originalPrice: calculatedOriginalPrice,
+          comboPrice: calculatedComboPrice,
+          courseIds: selectedComboCourseIds,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const savedMoney = calculatedOriginalPrice - calculatedComboPrice;
+        setMessage(`Đã tạo gói combo "${data.data.name}" thành công! Mức tiết kiệm ưu đãi: ${savedMoney.toLocaleString('vi-VN')} đ`);
+        setNewCombo({
+          comboCode: '',
+          name: '',
+          discountType: 'PERCENT',
+          discountValue: 10,
+        });
+        setSelectedComboCourseIds([]);
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi tạo combo');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCombo = async (id: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn ngưng hoạt động gói combo "${name}"?`)) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/catalog/combos/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`Đã ngưng hoạt động gói combo "${name}" thành công!`);
+        await fetchData();
+      } else {
+        alert(data.message || 'Lỗi khi ngưng combo');
+      }
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Product Handlers
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,7 +597,7 @@ export function AdminScreen() {
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span>Cài Đặt Khóa Học ({courses.length})</span>
+          <span>Khóa Học & Gói Combo ({courses.length + combos.length})</span>
         </button>
 
         <button
@@ -579,194 +701,661 @@ export function AdminScreen() {
         </div>
       )}
 
-      {/* Subtab: Courses & Tuition Settings */}
+      {/* Subtab: Courses & Course Packages (Combos) */}
       {activeSubTab === 'COURSES' && (
         <div className="space-y-6">
-          {/* Form thêm khóa học mới */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-indigo-600" />
-                  Cài Đặt & Thêm Khóa Học Mới
-                </h2>
-                <span className="text-xs text-slate-500">Khóa học sẽ hiển thị ngay trên POS Thu Ngân & Phân Lớp Giáo Vụ</span>
-              </div>
+          {/* Sub-filter Navigation: Tất cả / Khóa đơn lẻ / Gói combo */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">Chế Độ Xem:</span>
+              <button
+                type="button"
+                onClick={() => setCourseViewFilter('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  courseViewFilter === 'ALL'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tất Cả ({courses.length} Khóa + {combos.length} Combo)
+              </button>
+              <button
+                type="button"
+                onClick={() => setCourseViewFilter('SINGLE')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  courseViewFilter === 'SINGLE'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Khóa Học Đơn Lẻ ({courses.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCourseViewFilter('COMBOS')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  courseViewFilter === 'COMBOS'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                }`}
+              >
+                <Gift className="w-3.5 h-3.5" />
+                <span>Gói Combo Ưu Đãi ({combos.length})</span>
+              </button>
             </div>
 
-            <form onSubmit={handleCreateCourse} className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã Khóa Học (In hoa)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: SOROBAN-03"
-                    value={newCourse.courseCode}
-                    onChange={(e) => setNewCourse({ ...newCourse, courseCode: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Khóa Học</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: Toán Trí Tuệ Soroban Cấp Độ 3"
-                    value={newCourse.name}
-                    onChange={(e) => setNewCourse({ ...newCourse, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Phân Loại Bộ Môn</label>
-                  <select
-                    value={newCourse.subjectType}
-                    onChange={(e) => setNewCourse({ ...newCourse, subjectType: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
-                  >
-                    <option value="TOAN_TRI_TUE">🧮 Toán Trí Tuệ (Soroban)</option>
-                    <option value="KY_NANG_SONG">🌱 Kỹ Năng Sống</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Học Phí Niêm Yết (VNĐ)</label>
-                  <input
-                    type="number"
-                    step="10000"
-                    required
-                    placeholder="VD: 3600000"
-                    value={newCourse.tuitionFee}
-                    onChange={(e) => setNewCourse({ ...newCourse, tuitionFee: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-bold text-indigo-700"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Cấp Độ (Level Order)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newCourse.levelOrder}
-                    onChange={(e) => setNewCourse({ ...newCourse, levelOrder: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Quy Chuẩn Số Buổi</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newCourse.totalSessions}
-                    onChange={(e) => setNewCourse({ ...newCourse, totalSessions: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Kỳ Hạn Chuẩn (Tháng)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newCourse.standardMonths}
-                    onChange={(e) => setNewCourse({ ...newCourse, standardMonths: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tạo Khóa Học Mới</span>
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Danh sách Khóa Học */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-800">Danh Sách Khóa Học & Biểu Phí Đang Áp Dụng</h3>
-              <span className="text-xs text-slate-500 font-medium">{courses.length} khóa học</span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
-                    <th className="p-3.5">Mã Khóa</th>
-                    <th className="p-3.5">Tên Khóa Học</th>
-                    <th className="p-3.5">Bộ Môn</th>
-                    <th className="p-3.5 text-center">Cấp Độ</th>
-                    <th className="p-3.5 text-center">Lộ Trình</th>
-                    <th className="p-3.5 text-right">Học Phí Niêm Yết (VNĐ)</th>
-                    <th className="p-3.5 text-center">Trạng Thái</th>
-                    <th className="p-3.5 text-center">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {courses.map((course) => (
-                    <tr key={course.id} className="hover:bg-slate-50 transition">
-                      <td className="p-3.5 font-mono font-bold text-slate-900">{course.courseCode}</td>
-                      <td className="p-3.5 font-semibold text-slate-800">{course.name}</td>
-                      <td className="p-3.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          course.subjectType === 'TOAN_TRI_TUE' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          {course.subjectType === 'TOAN_TRI_TUE' ? 'Toán Trí Tuệ' : 'Kỹ Năng Sống'}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-center font-bold text-indigo-600">Level {course.levelOrder}</td>
-                      <td className="p-3.5 text-center text-slate-600">
-                        {course.totalSessions} buổi / {course.standardMonths} tháng
-                      </td>
-                      <td className="p-3.5 text-right">
-                        <input
-                          type="number"
-                          step="10000"
-                          defaultValue={Number(course.tuitionFee)}
-                          onBlur={(e) => {
-                            if (Number(e.target.value) !== Number(course.tuitionFee)) {
-                              handleUpdateCourse(course.id, { tuitionFee: Number(e.target.value) });
-                            }
-                          }}
-                          className="w-32 px-2.5 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
-                          title="Sửa học phí rồi rời chuột để lưu"
-                        />
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {course.status}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCourse(course.id, course.name)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                          title="Ngưng kích hoạt khóa học"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="text-xs text-slate-500 pr-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>Gói Combo tự động cộng gộp học phí & tính chiết khấu trực quan</span>
             </div>
           </div>
+
+          {/* SECTION 1: KHÓA HỌC ĐƠN LẺ */}
+          {(courseViewFilter === 'ALL' || courseViewFilter === 'SINGLE') && (
+            <div className="space-y-6">
+              {/* Form thêm khóa học đơn mới */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-indigo-600" />
+                      Cài Đặt & Thêm Khóa Học Chuẩn (Đơn Lẻ)
+                    </h2>
+                    <span className="text-xs text-slate-500">Khóa học đơn lẻ theo lộ trình chuẩn từng cấp độ (24 buổi)</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCreateCourse} className="p-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Mã Khóa Học (In hoa)</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: SOROBAN-03"
+                        value={newCourse.courseCode}
+                        onChange={(e) => setNewCourse({ ...newCourse, courseCode: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Khóa Học</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: Toán Trí Tuệ Soroban Cấp Độ 3"
+                        value={newCourse.name}
+                        onChange={(e) => setNewCourse({ ...newCourse, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Phân Loại Bộ Môn</label>
+                      <select
+                        value={newCourse.subjectType}
+                        onChange={(e) => setNewCourse({ ...newCourse, subjectType: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-semibold"
+                      >
+                        <option value="TOAN_TRI_TUE">🧮 Toán Trí Tuệ (Soroban)</option>
+                        <option value="KY_NANG_SONG">🌱 Kỹ Năng Sống</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Học Phí Niêm Yết (VNĐ)</label>
+                      <input
+                        type="number"
+                        step="10000"
+                        required
+                        placeholder="VD: 3600000"
+                        value={newCourse.tuitionFee}
+                        onChange={(e) => setNewCourse({ ...newCourse, tuitionFee: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-indigo-600 font-bold text-indigo-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Cấp Độ (Level Order)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={newCourse.levelOrder}
+                        onChange={(e) => setNewCourse({ ...newCourse, levelOrder: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Quy Chuẩn Số Buổi</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={newCourse.totalSessions}
+                        onChange={(e) => setNewCourse({ ...newCourse, totalSessions: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Kỳ Hạn Chuẩn (Tháng)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={newCourse.standardMonths}
+                        onChange={(e) => setNewCourse({ ...newCourse, standardMonths: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 shadow transition cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Tạo Khóa Học Mới</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Danh sách Khóa Học */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-800">Danh Sách Khóa Học & Biểu Phí Đang Áp Dụng</h3>
+                  <span className="text-xs text-slate-500 font-medium">{courses.length} khóa học</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                        <th className="p-3.5">Mã Khóa</th>
+                        <th className="p-3.5">Tên Khóa Học</th>
+                        <th className="p-3.5">Bộ Môn</th>
+                        <th className="p-3.5 text-center">Cấp Độ</th>
+                        <th className="p-3.5 text-center">Lộ Trình</th>
+                        <th className="p-3.5 text-right">Học Phí Niêm Yết (VNĐ)</th>
+                        <th className="p-3.5 text-center">Trạng Thái</th>
+                        <th className="p-3.5 text-center">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {courses.map((course) => (
+                        <tr key={course.id} className="hover:bg-slate-50 transition">
+                          <td className="p-3.5 font-mono font-bold text-slate-900">{course.courseCode}</td>
+                          <td className="p-3.5 font-semibold text-slate-800">{course.name}</td>
+                          <td className="p-3.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              course.subjectType === 'TOAN_TRI_TUE' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {course.subjectType === 'TOAN_TRI_TUE' ? 'Toán Trí Tuệ' : 'Kỹ Năng Sống'}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-center font-bold text-indigo-600">Level {course.levelOrder}</td>
+                          <td className="p-3.5 text-center text-slate-600">
+                            {course.totalSessions} buổi / {course.standardMonths} tháng
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <input
+                              type="number"
+                              step="10000"
+                              defaultValue={Number(course.tuitionFee)}
+                              onBlur={(e) => {
+                                if (Number(e.target.value) !== Number(course.tuitionFee)) {
+                                  handleUpdateCourse(course.id, { tuitionFee: Number(e.target.value) });
+                                }
+                              }}
+                              className="w-32 px-2.5 py-1 text-right border border-slate-300 rounded-lg font-bold text-indigo-700 bg-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                              title="Sửa học phí rồi rời chuột để lưu"
+                            />
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {course.status}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCourse(course.id, course.name)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                              title="Ngưng kích hoạt khóa học"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2: GÓI COMBO KHÓA HỌC (NHIỀU KHÓA + CỘNG GỘP GIÁ + ƯU ĐÃI GIẢM GIÁ) */}
+          {(courseViewFilter === 'ALL' || courseViewFilter === 'COMBOS') && (
+            <div className="space-y-6 pt-2">
+              {/* Form Tạo Gói Combo Mới */}
+              <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-md overflow-hidden">
+                <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-pink-50 border-b border-purple-200 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-purple-600" />
+                      Cài Đặt & Tạo Gói Combo Khóa Học Ưu Đãi
+                    </h2>
+                    <span className="text-xs text-purple-700">
+                      Tích chọn nhiều khóa học để hệ thống tự động cộng gộp giá gốc & thiết lập mức ưu đãi giảm giá
+                    </span>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                    {selectedComboCourseIds.length} khóa đã chọn
+                  </span>
+                </div>
+
+                <form onSubmit={handleCreateCombo} className="p-5 space-y-6 text-xs">
+                  {/* BƯỚC 1: LỰA CHỌN CÁC KHÓA HỌC TRONG GÓI */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">1</span>
+                        Lựa Chọn Các Khóa Học Bao Gồm Trong Gói Combo (Tối thiểu 2 khóa):
+                      </label>
+                      <span className="text-[11px] text-slate-500">
+                        Nhấp vào thẻ khóa học để chọn hoặc bỏ chọn
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {courses.map((c) => {
+                        const isSelected = selectedComboCourseIds.includes(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => toggleCourseInCombo(c.id)}
+                            className={`p-3.5 rounded-xl border-2 cursor-pointer transition flex items-start gap-3 select-none ${
+                              isSelected
+                                ? 'border-purple-600 bg-purple-50/70 shadow-sm'
+                                : 'border-slate-200 hover:border-purple-300 bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="pt-0.5">
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-purple-600 shrink-0" />
+                              ) : (
+                                <Square className="w-5 h-5 text-slate-400 shrink-0" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className="font-mono font-bold text-purple-900 text-[11px] truncate">
+                                  {c.courseCode}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  c.subjectType === 'TOAN_TRI_TUE' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                }`}>
+                                  {c.subjectType === 'TOAN_TRI_TUE' ? 'Toán Trí Tuệ' : 'Kỹ Năng Sống'}
+                                </span>
+                              </div>
+                              <div className="font-semibold text-slate-800 text-xs mb-1 line-clamp-1" title={c.name}>
+                                {c.name}
+                              </div>
+                              <div className="flex justify-between items-center text-[11px] mt-1 pt-1 border-t border-slate-200/60">
+                                <span className="text-slate-500">Level {c.levelOrder} ({c.totalSessions} buổi)</span>
+                                <span className="font-bold text-indigo-700">
+                                  {Number(c.tuitionFee).toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Dải tóm tắt lộ trình các khóa đã chọn */}
+                    {selectedComboCourseIds.length > 0 && (
+                      <div className="mt-3 p-3 bg-purple-50 rounded-xl border border-purple-200 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-purple-900">Lộ trình gói combo:</span>
+                        {selectedComboCourseIds.map((cId, idx) => {
+                          const course = courses.find((item) => item.id === cId);
+                          return (
+                            <span
+                              key={cId}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-purple-300 font-semibold text-purple-900 text-xs shadow-sm"
+                            >
+                              <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[10px] flex items-center justify-center font-bold">
+                                {idx + 1}
+                              </span>
+                              <span>{course?.courseCode}: {course?.name}</span>
+                              <span className="text-purple-600 text-[11px] font-bold">({Number(course?.tuitionFee).toLocaleString('vi-VN')} đ)</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BƯỚC 2: CẤU HÌNH THÔNG TIN GÓI & TÙY CHỌN ƯU ĐÃI GIẢM GIÁ */}
+                  <div className="pt-2 border-t border-slate-200">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-3">
+                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">2</span>
+                      Thiết Lập Tên Gói, Mã Gói & Chính Sách Giảm Giá:
+                    </label>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                      {/* Cột trái (7/12): Nhập Mã, Tên & Tùy chọn giảm giá */}
+                      <div className="lg:col-span-7 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Mã Gói Combo (In hoa, không dấu)
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="VD: COMBO-SB-2LV"
+                              value={newCombo.comboCode}
+                              onChange={(e) => setNewCombo({ ...newCombo, comboCode: e.target.value.toUpperCase() })}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono uppercase bg-white focus:outline-none focus:border-purple-600 font-semibold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Tên Gói Combo Khóa Học
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="VD: Combo Soroban Cấp Độ 1 + 2 Tiết Kiệm"
+                              value={newCombo.name}
+                              onChange={(e) => setNewCombo({ ...newCombo, name: e.target.value })}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-purple-600 font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Tùy chọn ưu đãi giảm giá */}
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <Tag className="w-3.5 h-3.5 text-purple-600" />
+                              Tùy Chọn Ưu Đãi Giảm Giá Cho Gói:
+                            </span>
+
+                            {/* Toggle giữa % và Tiền mặt */}
+                            <div className="flex p-0.5 bg-slate-200 rounded-lg text-xs font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setNewCombo({ ...newCombo, discountType: 'PERCENT', discountValue: 10 })}
+                                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                                  newCombo.discountType === 'PERCENT'
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <Percent className="w-3 h-3" />
+                                <span>Theo % Chiết Khấu</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewCombo({ ...newCombo, discountType: 'AMOUNT', discountValue: 500000 })}
+                                className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                                  newCombo.discountType === 'AMOUNT'
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <Coins className="w-3 h-3" />
+                                <span>Số Tiền Giảm (VNĐ)</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                                {newCombo.discountType === 'PERCENT' ? 'Mức phần trăm giảm giá (%):' : 'Số tiền giảm trực tiếp (VNĐ):'}
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={newCombo.discountType === 'PERCENT' ? 100 : calculatedOriginalPrice}
+                                  step={newCombo.discountType === 'PERCENT' ? 1 : 50000}
+                                  value={newCombo.discountValue}
+                                  onChange={(e) => setNewCombo({ ...newCombo, discountValue: Number(e.target.value) })}
+                                  className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-xl bg-white font-bold text-purple-700 focus:outline-none focus:border-purple-600"
+                                />
+                                <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">
+                                  {newCombo.discountType === 'PERCENT' ? '%' : 'VNĐ'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Preset Buttons */}
+                            <div className="flex flex-col justify-end">
+                              <span className="text-[11px] font-semibold text-slate-500 mb-1">Chọn nhanh:</span>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {newCombo.discountType === 'PERCENT' ? (
+                                  [5, 10, 15, 20, 25].map((val) => (
+                                    <button
+                                      key={val}
+                                      type="button"
+                                      onClick={() => setNewCombo({ ...newCombo, discountValue: val })}
+                                      className={`px-2 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
+                                        newCombo.discountValue === val
+                                          ? 'bg-purple-600 text-white'
+                                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-purple-50'
+                                      }`}
+                                    >
+                                      {val}%
+                                    </button>
+                                  ))
+                                ) : (
+                                  [300000, 500000, 1000000, 1500000].map((val) => (
+                                    <button
+                                      key={val}
+                                      type="button"
+                                      onClick={() => setNewCombo({ ...newCombo, discountValue: val })}
+                                      className={`px-2 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
+                                        newCombo.discountValue === val
+                                          ? 'bg-purple-600 text-white'
+                                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-purple-50'
+                                      }`}
+                                    >
+                                      {(val / 1000).toLocaleString('vi-VN')}k
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Cột phải (5/12): Bảng Tính Toán Cộng Gộp & Chốt Giá Tự Động */}
+                      <div className="lg:col-span-5">
+                        <div className="p-4 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 text-white rounded-2xl shadow-lg space-y-3.5 h-full flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between border-b border-purple-500/30 pb-2 mb-3">
+                              <span className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                                <Calculator className="w-4 h-4 text-purple-300" />
+                                Bảng Cộng Gộp & Chốt Giá Gói
+                              </span>
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/20 text-white">
+                                Tự động tính toán
+                              </span>
+                            </div>
+
+                            <div className="space-y-2.5 text-xs">
+                              <div className="flex justify-between items-center text-purple-200">
+                                <span>Số khóa học gộp trong gói:</span>
+                                <span className="font-bold text-white text-sm">{selectedComboCourseIds.length} khóa học</span>
+                              </div>
+
+                              <div className="flex justify-between items-center text-purple-200">
+                                <span>Tổng học phí gốc (Cộng gộp):</span>
+                                <span className="font-bold text-white text-sm line-through decoration-rose-400">
+                                  {calculatedOriginalPrice.toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+
+                              <div className="flex justify-between items-center text-amber-300">
+                                <span>Mức ưu đãi giảm giá:</span>
+                                <span className="font-bold text-sm">
+                                  - {calculatedDiscountAmount.toLocaleString('vi-VN')} đ
+                                  {newCombo.discountType === 'PERCENT' && ` (${newCombo.discountValue}%)`}
+                                </span>
+                              </div>
+
+                              <div className="pt-2 border-t border-purple-500/40 flex justify-between items-end">
+                                <div>
+                                  <span className="text-[11px] font-bold text-purple-300 uppercase block">Giá Gói Combo Thực Thu:</span>
+                                  <span className="text-[10px] text-emerald-300 font-medium">
+                                    Tiết kiệm: {(calculatedOriginalPrice - calculatedComboPrice).toLocaleString('vi-VN')} đ
+                                  </span>
+                                </div>
+                                <div className="text-2xl font-black text-emerald-400">
+                                  {calculatedComboPrice.toLocaleString('vi-VN')} đ
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-2">
+                            <button
+                              type="submit"
+                              disabled={loading || selectedComboCourseIds.length < 2}
+                              className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                                selectedComboCourseIds.length >= 2
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                              }`}
+                            >
+                              <Gift className="w-4 h-4" />
+                              <span>
+                                {selectedComboCourseIds.length >= 2
+                                  ? 'Lưu & Kích Hoạt Gói Combo Khóa Học'
+                                  : 'Vui lòng chọn ít nhất 2 khóa học'}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Danh sách Các Gói Combo Đang Khả Dụng */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-purple-50/50 border-b border-purple-100 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-purple-600" />
+                      Danh Sách Gói Combo Đang Khả Dụng Trên POS
+                    </h3>
+                    <span className="text-xs text-slate-500">Các gói combo này sẽ hiển thị tại Mục 2 trên Màn hình Thu Ngân POS</span>
+                  </div>
+                  <span className="text-xs font-bold text-purple-700 bg-purple-100 px-3 py-1 rounded-full">
+                    {combos.length} gói combo
+                  </span>
+                </div>
+
+                {combos.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    Chưa có gói combo nào. Hãy chọn các khóa học phía trên và nhấn "Lưu & Kích Hoạt Gói Combo".
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                          <th className="p-3.5">Mã Combo</th>
+                          <th className="p-3.5">Tên Gói Combo</th>
+                          <th className="p-3.5">Các Khóa Trong Gói</th>
+                          <th className="p-3.5 text-center">Số Khóa</th>
+                          <th className="p-3.5 text-right">Giá Gốc Cộng Gộp</th>
+                          <th className="p-3.5 text-right text-purple-700">Giá Ưu Đãi (Combo)</th>
+                          <th className="p-3.5 text-right text-emerald-600">Mức Tiết Kiệm</th>
+                          <th className="p-3.5 text-center">Trạng Thái</th>
+                          <th className="p-3.5 text-center">Thao Tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {combos.map((combo) => {
+                          const original = Number(combo.originalPrice);
+                          const finalPrice = Number(combo.comboPrice);
+                          const saved = original - finalPrice;
+                          const percent = original > 0 ? Math.round((saved / original) * 100) : 0;
+
+                          return (
+                            <tr key={combo.id} className="hover:bg-purple-50/40 transition">
+                              <td className="p-3.5 font-mono font-bold text-purple-900">{combo.comboCode}</td>
+                              <td className="p-3.5 font-bold text-slate-800">{combo.name}</td>
+                              <td className="p-3.5">
+                                <div className="flex flex-wrap gap-1">
+                                  {combo.items && combo.items.length > 0 ? (
+                                    combo.items.map((it: any, idx: number) => (
+                                      <span
+                                        key={it.id || idx}
+                                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200"
+                                      >
+                                        {idx + 1}. {it.course?.courseCode || it.course?.name || 'Khóa'}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-slate-400 italic">Combo liên tiếp</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3.5 text-center font-bold text-slate-700">
+                                {combo.totalCourses} khóa
+                              </td>
+                              <td className="p-3.5 text-right text-slate-400 line-through">
+                                {original.toLocaleString('vi-VN')} đ
+                              </td>
+                              <td className="p-3.5 text-right font-black text-purple-700 text-sm">
+                                {finalPrice.toLocaleString('vi-VN')} đ
+                              </td>
+                              <td className="p-3.5 text-right font-bold text-emerald-600">
+                                -{saved.toLocaleString('vi-VN')} đ ({percent}%)
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  {combo.status}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCombo(combo.id, combo.name)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                  title="Ngưng hoạt động combo"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

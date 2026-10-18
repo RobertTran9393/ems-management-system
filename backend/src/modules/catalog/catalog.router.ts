@@ -213,3 +213,17 @@ catalogRouter.put('/combos/:id', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// 10. Delete / Inactivate Course Combo
+catalogRouter.delete('/combos/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.courseCombo.update({
+      where: { id },
+      data: { status: 'INACTIVE' },
+    });
+    return res.json({ success: true, message: 'Đã chuyển trạng thái combo sang Ngưng hoạt động' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
