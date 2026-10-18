@@ -1,0 +1,173 @@
+[Title] TÀI LIỆU ĐẶC TẢ YÊU CẦU PHẦN MỀM (SRS) & THIẾT KẾ GIAO DIỆN (WIREFRAME)
+[normal] Dự án: Hệ thống Quản lý Nội bộ & Đào tạo Trung tâm Toán Trí Tuệ và Kỹ Năng Sống (ERP & CRM)
+Phiên bản: 2.0 (Bản chính thức gửi đối tác phát triển phần mềm)
+[Heading 1] PHẦN I. TỔNG QUAN DỰ ÁN & KIẾN TRÚC KỸ THUẬT
+[Heading 2] 1. Mục tiêu hệ thống
+[normal] Xây dựng hệ thống quản lý tập trung khép kín với luồng nghiệp vụ liên hoàn:
+[normal] Tiếp nhận khách hàng tiềm năng (CRM)
+[normal] Học thử & Kiểm tra đầu vào (Trial & Entry Test)
+[normal] Bán hàng & Thu ngân (Khoá học đơn/Combo & Vật tư giáo trình)
+[normal] Quản lý đào tạo & Khảo thí (Điểm danh GPS, Học bù, Bảo lưu, 3 kỳ kiểm tra)
+[normal] Tự động hóa Tính lương, Phụ cấp & Thưởng KPI giáo viên.
+[Heading 2] 2. Nền tảng phát triển
+[Heading 3] Web Application (Responsive)
+[normal] Đối tượng: Admin, Giáo vụ, Kế toán/Thu ngân, Sale, Giáo viên.
+[normal] Chức năng: Hỗ trợ quản trị toàn diện, màn hình POS thu ngân, báo cáo thống kê, xuất/nhập Excel, in phiếu thu.
+[Heading 3] Mobile Application (iOS & Android)
+[normal] Role Giáo viên: Xem lịch dạy, Chấm công ca dạy bằng định vị GPS, Điểm danh học viên tại lớp, Nhập điểm/nhận xét 3 bài kiểm tra, Theo dõi KPI và Phiếu lương.
+[normal] Role Phụ huynh: Nhận thông báo điểm danh, xem lịch học, số buổi còn lại, kết quả 3 bài kiểm tra, thanh toán học phí qua QR.
+[Heading 2] 3. Tích hợp bên thứ ba
+[normal] Định vị GPS (Geolocation): Kiểm tra tọa độ thiết bị Giáo viên khi Check-in ca dạy/Điểm danh so với tọa độ Chi nhánh (bán kính cấu hình 100m - 200m).
+[normal] Cổng thanh toán VietQR động: Sinh mã QR động chứa sẵn số tiền và nội dung nộp tiền cho từng đợt đóng phí; tự động gạch nợ qua Webhook.
+[normal] Tin nhắn tự động (Zalo ZNS): Tự động gửi Zalo cho phụ huynh khi hoàn tất điểm danh buổi học, gửi kết quả kiểm tra định kỳ và nhắc hạn đóng học phí.
+[Heading 1] PHẦN II. ĐẶC TẢ CHI TIẾT 8 PHÂN HỆ CHỨC NĂNG (MODULES)
+[Heading 2] 1. Quản trị Hệ thống
+[normal] Quản lý Chi nhánh, Phòng học, Tọa độ GPS (Vĩ độ - Kinh độ) và Bán kính cho phép điểm danh.
+[normal] Quản lý Tài khoản & Phân quyền (RBAC) chi tiết theo vai trò (Admin, Kế toán, Sale, Giáo vụ, Giáo viên).
+[normal] Cấu hình Tham số: Hạn chuẩn (3 tháng), Hạn tối đa hoàn thành khoá (4 tháng), Bảo lưu tối đa (3 tháng), Định mức thưởng HV mới, Định mức thưởng HV lên khoá đúng hạn, Ngày nghỉ lễ.
+[normal] Nhật ký hệ thống (Audit Log) lưu vết chỉnh sửa dữ liệu.
+[Heading 2] 2. CRM - Quản lý Khách hàng tiềm năng
+[normal] Quản lý Hồ sơ Lead (Thông tin Phụ huynh & Học sinh, Bộ môn quan tâm, Nguồn khách hàng).
+[normal] Theo dõi Tiến trình Tư vấn: Mới $\rightarrow$ Đang tư vấn $\rightarrow$ Hẹn học thử $\rightarrow$ Đã học thử $\rightarrow$ Chờ đóng phí $\rightarrow$ Đã thành Học viên / Huỷ.
+[normal] Quản lý Học thử (Trial Class): Xếp lịch học thử, Giáo viên nhập kết quả Bài kiểm tra đầu khoá (Entry Test).
+[normal] Chuyển đổi Tự động: Khi đóng phí đợt 1, tự động chuyển thành Học viên chính thức và ghi nhận thưởng "Học viên mới".
+[Heading 2] 3. Quản lý Khoá học, Combo & Lớp học
+[normal] Danh mục Khoá học đơn: Bộ môn (Toán trí tuệ / Kỹ năng sống), Cấp độ, Tổng số buổi (24 buổi), Thời lượng chuẩn (3 tháng - 2 buổi/tuần), Thời hạn tối đa (4 tháng), Học phí.
+[normal] Danh mục Gói Combo: Ghép nhiều khoá học liên tiếp (VD: Combo 2 khoá = 48 buổi, Combo 3 khoá = 72 buổi) với giá ưu đãi.
+[normal] Quản lý Lớp học: Tạo lớp, gán phòng, gán giáo viên, tự động sinh lịch 24 buổi học (trừ ngày lễ) và kiểm tra trùng lịch.
+[Heading 2] 4. Nhập hàng & Quản lý Kho Vật tư
+[normal] Danh mục vật tư bán riêng (Sách giáo trình, Bàn tính Soroban, Thẻ số, Đồng phục, Balo).
+[normal] Tạo phiếu Nhập kho, Xuất kho bán lẻ theo đơn POS, Kiểm kê kho và Cảnh báo tồn kho tối thiểu.
+[Heading 2] 5. Bán hàng, Thu ngân (POS) & Công nợ
+[normal] Màn hình POS tích hợp: Đăng ký Khoá học đơn/Gói Combo + Mua lẻ Giáo trình/Vật tư (trừ kho trực tiếp) + Áp dụng Voucher.
+[normal] Thanh toán Chia đợt (Installments): Cho phép đóng nhiều đợt, tự động tính số tiền còn nợ và bắt buộc nhập Ngày hẹn đóng cho các đợt tiếp theo.
+[normal] Sinh mã VietQR động gạch nợ tự động và Quản lý danh sách nhắc nợ.
+[Heading 2] 6. Quản lý Học viên & Khảo thí (3 Bài kiểm tra)
+[normal] Theo dõi Tiến độ 24 buổi: Đã học, Vắng có phép (Chờ bù), Vắng không phép, Còn lại, Mốc 3 tháng (Xét đúng hạn), Mốc 4 tháng (Hạn tối đa).
+[normal] Quản lý 3 Bài Kiểm tra bắt buộc mỗi khoá:
+[normal] Kiểm tra Đầu khoá (Buổi 1/Học thử)
+[normal] Kiểm tra Giữa khoá (Buổi 12)
+[normal] Kiểm tra Cuối khoá (Buổi 24 - Bắt buộc xét duyệt PASS/FAIL để lên khoá)
+[normal] Quản lý xếp lịch Học bù và Bảo lưu (tối đa 3 tháng).
+[Heading 2] 7. Điểm danh Khoá học (GPS & Zalo)
+[normal] Xác thực GPS Giáo viên trước khi mở khoá màn hình điểm danh.
+[normal] Điểm danh học viên (Có mặt, Vắng có phép, Vắng không phép), nhắc nhập điểm kiểm tra tại buổi 1, 12, 24 và tự động gửi Zalo ZNS cho phụ huynh.
+[Heading 2] 8. Quản lý Nhân sự & Tính lương
+[normal] Cấu hình lương Giáo viên Full-time (Lương căn bản / Tổng giờ làm việc định mức tháng) và Part-time (Đơn giá / giờ dạy).
+[normal] Quản lý Phụ cấp Bổ sung Tuỳ chọn: Phụ cấp cố định tháng, Phụ cấp theo ca dạy, Phụ cấp nhập tay đột xuất.
+[normal] Tự động tổng hợp Lương giờ công + Thưởng HV mới + Thưởng HV lên khoá đúng hạn + Phụ cấp - Khấu trừ. Xuất Phiếu lương.
+[Heading 1] PHẦN III. CÁC THUẬT TOÁN & QUY TẮC NGHIỆP VỤ CỐT LÕI (BUSINESS LOGIC)
+[Heading 2] 1. Vòng đời Khoá học (24 Buổi - Chuẩn 3 Tháng - Tối đa 4 Tháng)
+[normal] Khi học buổi 1 (Ngày kích hoạt $T_0$), hệ thống gán:
+$$\text{Standard_Deadline} = T_0 + 3\text{ tháng}$$
+$$\text{Max_Expired_Date} = T_0 + 4\text{ tháng}$$
+[normal] Điểm danh Có mặt hoặc Vắng không phép: Trừ 1 buổi.
+[normal] Điểm danh Vắng có phép: Không trừ buổi, đưa vào danh sách Chờ học bù. Khi đi học bù và Có mặt mới trừ 1 buổi.
+[normal] Mọi buổi học chính và học bù phải hoàn tất trước mốc 4 tháng.
+[Heading 2] 2. Logic Bảo lưu (Tối đa 3 tháng / 90 ngày)
+[normal] Đóng băng số buổi còn lại trong thời gian bảo lưu.
+[normal] Khi học viên đi học lại, hệ thống tự động cộng bù số ngày đã bảo lưu thực tế vào Max_Expired_Date.
+[Heading 2] 3. Logic Gói Combo (Nhiều khoá học liên tiếp)
+[normal] Khi mua Combo $N$ khoá, hệ thống tạo $N$ bản ghi Ghi danh (Enrollments).
+[normal] Khoá 1 ở trạng thái ACTIVE (xếp lớp học ngay).
+[normal] Khoá 2, 3 ở trạng thái WAITING_IN_QUEUE (chờ kích hoạt).
+[normal] Khi Khoá 1 hoàn tất 24 buổi và đạt PASS bài kiểm tra cuối khoá, hệ thống mới chuyển Khoá 2 sang ACTIVE.
+[Heading 2] 4. Thuật toán Xác định "Học viên Lên khoá Đúng hạn" (Xét thưởng KPI Giáo viên)
+[normal] Học viên được ghi nhận Lên khoá đúng hạn khi thoả mãn đồng thời 4 điều kiện:
+[normal] Điều kiện 1: Hoàn thành đủ 24/24 buổi học.
+[normal] Điều kiện 2: Ngày hoàn thành buổi thứ 24 nằm trong hạn 3 tháng tiêu chuẩn ($\text{Completion_Date} \le \text{Standard_Deadline}$).
+[normal] Điều kiện 3: Hoàn thành 3 bài kiểm tra và bài Kiểm tra Cuối khoá đạt trạng thái Đủ điều kiện lên khoá (PASS).
+[normal] Điều kiện 4: Học viên chuyển sang khoá tiếp theo (kích hoạt khoá kế tiếp trong Combo hoặc đóng phí khoá mới).
+[Heading 2] 5. Công thức Tính Lương Giáo viên
+[normal] $$\text{Tổng Lương Thực Lĩnh} = \text{Lương Giờ Công} + \text{Thưởng HV Mới} + \text{Thưởng Lên Khoá Đúng Hạn} + \text{Phụ Cấp Bổ Sung} - \text{Khấu Trừ}$$
+[Heading 3] Chi tiết tính Lương Giờ Công:
+[normal] Full-time:
+$$\text{Lương Giờ Công} = \left( \frac{\text{Lương Căn Bản}}{\text{Tổng Giờ Định Mức Tháng}} \right) \times \text{Tổng Giờ Làm Việc Thực Tế}$$
+(Trong đó: Tổng giờ làm việc = Giờ dạy GPS + Giờ hành chính)
+[normal] Part-time:
+$$\text{Lương Giờ Công} = \text{Tổng Giờ Dạy Thực Tế (hợp lệ GPS)} \times \text{Đơn Giá Giờ Dạy}$$
+[Heading 1] PHẦN IV. CẤU TRÚC CƠ SỞ DỮ LIỆU ĐỀ XUẤT (DATABASE ENTITIES)
+[Heading 1] PHẦN V. ĐẶC TẢ BỐ CỤC GIAO DIỆN (WIREFRAMES) CHO 4 MÀN HÌNH CHÍNH
+[Heading 2] 1. Màn hình 1 - Điểm danh GPS & Nhập điểm Khảo thí (Mobile App Giáo viên)
+[normal] Khu vực 1 (Trên cùng - Header Check-in):
+[normal] Thông tin lớp học, ca học, phòng học.
+[normal] Trạng thái định vị GPS (Khoảng cách hiện tại tới trung tâm: VD 45m - Hợp lệ).
+[normal] Nút bấm hành động: [ Bấm Check-in Bắt đầu ca dạy ].
+[normal] Ràng buộc: Nếu chưa Check-in GPS hợp lệ, toàn bộ danh sách điểm danh bên dưới bị khóa.
+[normal] Khu vực 2 (Giữa - Danh sách học viên & Nhập điểm):
+[normal] Danh sách học viên trong ca dạy kèm thẻ phân loại: [Buổi: X/24] và [Học chính / HỌC BÙ / HỌC THỬ].
+[normal] Các nút thao tác chọn trạng thái: Có mặt, Vắng có phép, Vắng không phép.
+[normal] Ô nhập nhận xét buổi học và tải ảnh hoạt động lớp.
+[normal] Hộp thoại khảo thí tự động: Hiển thị khung nhập điểm kiểm tra màu cam đối với học viên ở các mốc đặc biệt:
+[normal] Buổi 1: Kiểm tra Đầu khoá
+[normal] Buổi 12: Kiểm tra Giữa khoá
+[normal] Buổi 24: Kiểm tra Cuối khoá (Bắt buộc chọn trạng thái PASS / FAIL trước khi lưu)
+[normal] Khu vực 3 (Đáy màn hình - Action Bar):
+[normal] Nút [ Lưu nháp ]
+[normal] Nút [ Hoàn tất & Gửi Zalo Phụ huynh ]
+[Heading 2] 2. Màn hình 2 - Quản lý Tiến độ 24 Buổi, Combo, Học bù & Bảo lưu (Web Giáo vụ)
+[normal] Thanh Lộ trình Combo (Pipeline ngang):
+[normal] Hiển thị tiến trình chuyển cấp: Khoá 1 (ĐANG HỌC) $\rightarrow$ Khoá 2 (CHỜ KÍCH HOẠT) $\rightarrow$ Khoá 3 (CHỜ KÍCH HOẠT).
+[normal] Khi Khoá 1 hoàn tất 24 buổi và đạt PASS Final Test, hệ thống hiển thị nút [ Kích hoạt Khoá 2 ].
+[normal] Khối Tiến độ & Thời hạn:
+[normal] Thanh tiến độ visual X/24 buổi.
+[normal] Thống kê: Số buổi Đã học, Vắng không phép, Vắng có phép (Chờ bù - kèm nút [ Xếp lịch học bù nhanh ]).
+[normal] Mốc thời gian: Ngày kích hoạt buổi 1, Hạn chuẩn 3 tháng (xét KPI GV), Hạn tối đa 4 tháng (+Bảo lưu).
+[normal] Số ngày đã bảo lưu (tối đa 90 ngày) kèm nút [ + Tạo phiếu bảo lưu ].
+[normal] Khối 3 Bài Kiểm tra:
+[normal] Hiển thị 3 thẻ kết quả: Kiểm tra Đầu khoá (Buổi 1), Giữa khoá (Buổi 12) và Cuối khoá (Buổi 24 - Trạng thái PASS/FAIL).
+[normal] Bảng Lịch sử Chi tiết:
+[normal] Bảng liệt kê chi tiết từng buổi học chính và các buổi học bù đã tham gia.
+[Heading 2] 3. Màn hình 3 - Bảng Tính Lương, Thưởng KPI & Phụ cấp Tuỳ chọn (Web Kế toán/Admin)
+[normal] Nửa trên - Danh sách Tổng hợp Lương:
+[normal] Bảng tổng hợp lương toàn bộ giáo viên theo tháng (Lương cơ bản, Tổng giờ dạy, Thưởng KPI, Phụ cấp, Thực lĩnh, Trạng thái).
+[normal] Nửa dưới - Chi tiết Phiếu lương (Master-Detail Structure):
+[normal] Phần 1 (Lương giờ làm việc): Lương căn bản, Định mức giờ chuẩn, Giờ dạy GPS thực tế + Giờ hành chính $\rightarrow$ Thành tiền lương giờ công (kèm nút [ Xem chi tiết từng ca dạy ]).
+[normal] Phần 2 (Thưởng KPI tự động): Thưởng Học viên mới ($\text{SL} \times \text{Định mức}$) và Thưởng HV Lên khoá đúng hạn 3 tháng ($\text{SL} \times \text{Định mức}$), kèm nút [ Truy vết danh sách HV đạt chuẩn ].
+[normal] Phần 3 (Phụ cấp bổ sung tuỳ chọn): Danh sách các khoản phụ cấp Cố định tháng, Phụ cấp theo ca và nút [ + Thêm Phụ cấp ] để nhập tay các khoản đột xuất.
+[normal] Phần 4 (Khấu trừ & Thực lĩnh): Tổng hợp khấu trừ, Thực lĩnh NET. Nút hành động: [ Lưu thay đổi ] và [ Duyệt & Gửi Phiếu lương về App Giáo viên ].
+[Heading 2] 4. Màn hình 4 - Thu ngân Bán hàng tích hợp POS, Chia đợt & VietQR (Web Thu ngân)
+[Heading 3] Layout Chia 2 Cột (Split-Screen Layout)
+[Heading 1] PHẦN VI. THIẾT KẾ KIẾN TRÚC HỆ THỐNG DẠNG MODULE ĐỘC LẬP (MODULAR MONOLITH & EVENT-DRIVEN)
+[normal] Để đảm bảo hệ thống có thể dễ dàng thêm mới tính năng, chỉnh sửa từng phần riêng biệt mà không làm ảnh hưởng đến các module khác, đội ngũ lập trình bắt buộc phải tuân thủ kiến trúc Modular Monolith kết hợp Event-Driven (Hướng sự kiện).
+[Heading 2] 1. Nguyên tắc thiết kế cốt lõi:
+[normal] Cấm truy cập Database chéo (No Direct Cross-Module DB Queries): Mỗi module sở hữu riêng tập hợp bảng dữ liệu của mình. Module khác chỉ được lấy dữ liệu thông qua API nội bộ.
+[normal] Giao tiếp qua Trạm trung chuyển Sự kiện (Internal Event Bus / Pub-Sub): Các module không gọi trực tiếp hàm của nhau mà phát sự kiện (Publish Event) khi có nghiệp vụ xảy ra (VD: Khi hoàn tất đóng phí, phát sự kiện ORDER_PAID_SUCCESS để CRM, Kho, Học vụ và Tính lương tự động xử lý).
+[normal] Cấu trúc thư mục mã nguồn theo module (Feature-based folder structure), giúp bật/tắt hoặc chỉnh sửa riêng từng module độc lập.
+[Heading 2] 2. Phân rã 8 Module & Ranh giới Sở hữu Dữ liệu:
+[normal] MOD-CORE (Lõi quản trị hệ thống): branches, users, roles, system_configs, audit_logs.
+[normal] MOD-CRM (Khách hàng tiềm năng & Học thử): leads, lead_care_logs, trial_sessions.
+[normal] MOD-CATALOG (Khoá học, Combo & Lớp học): courses, course_combos, combo_items, classes.
+[normal] MOD-INV (Nhập hàng & Kho vật tư): products, suppliers, inventory_logs, branch_stocks.
+[normal] MOD-POS (Bán hàng, Thu ngân & Công nợ): orders, order_items, payment_installments.
+[normal] MOD-ACAD (Học viên, Tiến độ 24 buổi, Học bù, Bảo lưu, 3 Bài thi): students, enrollments, student_assessments, reservations.
+[normal] MOD-ATTEND (Điểm danh GPS & Lịch dạy): class_sessions, attendances.
+[normal] MOD-PAYROLL (Nhân sự, KPI & Tính lương): allowance_configs, payrolls, payroll_items, admin_timesheets.
+[normal] MOD-PLUGIN (Cổng tích hợp ngoài): webhook_logs, zns_logs (VietQR, Zalo ZNS).
+
+--- TABLE 1 ---
+STT | Entity Name | Danh sách Thuộc tính (Attributes)
+1 | branches | id, name, address, gps_latitude, gps_longitude, gps_radius_meters, status
+2 | users | id, branch_id, role, full_name, phone, email, contract_type (FULLTIME/PARTTIME), base_salary, standard_monthly_hours, hourly_teaching_rate, status
+3 | leads | id, branch_id, parent_name, parent_phone, student_name, student_dob, interested_subject, lead_source, assigned_user_id, status, converted_student_id
+4 | trial_sessions | id, lead_id, class_session_id, teacher_id, trial_date, attendance_status, entry_test_score, teacher_evaluation
+5 | students | id, student_code, branch_id, full_name, dob, gender, parent_name, parent_phone, zalo_uid, status
+6 | courses | id, course_code, name, subject_type, level_order, total_sessions (24), standard_months (3), max_months (4), tuition_fee, status
+7 | course_combos & combo_items | id, combo_code, name, total_courses, original_price, combo_price, list_of_course_ids_in_order
+8 | classes | id, class_code, course_id, branch_id, room_name, main_teacher_id, schedule_days, schedule_time, start_date, expected_end_date, max_students, status
+9 | enrollments | id, student_id, order_id, combo_id, sequence_in_combo, course_id, current_class_id, assigned_teacher_id, total_sessions (24), attended_sessions, makeup_pending_sessions, remaining_sessions, activation_date, standard_deadline_date, max_expired_date, completion_date, is_qualified_for_next_level, is_on_time_level_up, status
+10 | student_assessments | id, enrollment_id, student_id, teacher_id, test_type (ENTRY_TEST, MIDTERM_TEST, FINAL_TEST), session_number (1, 12, 24), test_date, score, evaluation_details, is_passed, attachment_urls
+11 | reservations | id, enrollment_id, student_id, start_date, end_date, actual_resume_date, extended_days, reason, approved_by
+12 | class_sessions | id, class_id, session_number, session_date, start_time, end_time, duration_hours, teacher_id, checkin_time, checkin_lat, checkin_lng, is_gps_valid, session_status
+13 | attendances | id, class_session_id, student_id, enrollment_id, attendance_type (REGULAR, MAKEUP), status (PRESENT, ABSENT_EXCUSED, ABSENT_UNEXCUSED), teacher_comment, zalo_zns_sent
+14 | products & inventory_logs | id, sku, name, unit, cost_price, selling_price, stock_quantity_by_branch
+15 | orders & order_items | id, order_code, student_id, total_tuition_fee, total_product_fee, discount_amount, final_total, paid_amount, remaining_debt, payment_status
+16 | payment_installments | id, order_id, installment_no, amount, due_date, paid_at, payment_method, transaction_ref, status
+17 | allowance_configs | id, name, allowance_type (FIXED_MONTHLY, PER_SESSION, MANUAL), default_amount, is_active
+18 | payrolls & payroll_items | id, user_id, month, year, contract_type_snapshot, total_teaching_hours, total_admin_hours, working_salary_amount, new_student_count, new_student_bonus_amount, on_time_levelup_count, on_time_levelup_bonus_amount, total_optional_allowances, total_deductions, net_salary, status
+
+--- TABLE 2 ---
+Cột Trái: Thông tin Đăng ký & Hàng hóa (60%) | Cột Phải: Thanh toán & Công nợ (40%)
+Mục 1: Chọn Khách hàng* Tự động nhận diện Lead học thử chuyển thành HV mới hoặc HV cũ lên khoá.* Gán Giáo viên & Sale hưởng KPI tương ứng. | Mục 4: Tổng hợp Đơn hàng* Tổng học phí* (+) Tổng tiền vật tư* (-) Giảm giá / Voucher* (=) Tổng thanh toán
+Mục 2: Chọn Khoá học / Combo* Đối với Combo: Chọn lớp và ngày bắt đầu cho Khoá 1.* Tự động đưa Khoá 2, Khoá 3 vào Hàng đợi (WAITING_IN_QUEUE). | Mục 5: Cấu hình Đóng phí & Chia đợt* Lựa chọn: Đóng 100% hoặc Chia nhiều đợt.* Nhập số tiền thu Đợt 1 $\rightarrow$ Tự động tính số tiền nợ còn lại.* Bắt buộc chọn Lịch hẹn đóng cho Đợt 2, Đợt 3 (Ràng buộc: Tổng các đợt = 100% Tổng thanh toán).
+Mục 3: Mua lẻ Giáo trình & Vật tư* Chọn Sách giáo trình, Bàn tính, Thẻ số, Đồng phục.* Kiểm tra tồn kho tại chỗ và tự động trừ kho chi nhánh sau khi thanh toán. | Mục 6: Thanh toán VietQR & Gạch nợ* Hiển thị mã VietQR động theo số tiền Đợt 1.* Tự động nhận diện giao dịch thành công qua Webhook ngân hàng.* Tự động gạch nợ và xuất lệnh in phiếu thu.

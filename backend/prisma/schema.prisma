@@ -1,0 +1,658 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  ADMIN
+  ACADEMIC_AFFAIRS  // Giáo vụ
+  ACCOUNTANT        // Kế toán / Thu ngân
+  SALE              // Tư vấn tuyển sinh
+  TEACHER           // Giáo viên
+}
+
+enum ContractType {
+  FULLTIME
+  PARTTIME
+}
+
+enum LeadStatus {
+  NEW               // Mới tiếp nhận
+  CONSULTING        // Đang tư vấn
+  TRIAL_SCHEDULED   // Hẹn học thử
+  TRIAL_ATTENDED    // Đã học thử
+  PAYMENT_PENDING   // Chờ đóng phí
+  CONVERTED         // Đã thành học viên chính thức
+  CANCELLED         // Huỷ tư vấn
+}
+
+enum AttendanceStatus {
+  PRESENT           // Có mặt
+  ABSENT_EXCUSED    // Vắng có phép (được học bù)
+  ABSENT_UNEXCUSED  // Vắng không phép
+}
+
+enum AttendanceType {
+  REGULAR           // Buổi học chính
+  MAKEUP            // Buổi học bù
+  TRIAL             // Buổi học thử
+}
+
+enum EnrollmentStatus {
+  ACTIVE            // Đang học
+  WAITING_IN_QUEUE  // Chờ kích hoạt (trong gói Combo)
+  RESERVED          // Đang bảo lưu
+  COMPLETED         // Đã hoàn thành khoá học
+  DROPPED           // Thôi học
+}
+
+enum AssessmentType {
+  ENTRY_TEST        // Buổi 1 / Bài test học thử
+  MIDTERM_TEST      // Buổi 12
+  FINAL_TEST        // Buổi 24 (Xét PASS/FAIL lên khoá)
+}
+
+enum OrderStatus {
+  DRAFT
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PaymentMethod {
+  VIETQR
+  CASH
+  BANK_TRANSFER
+  POS
+}
+
+enum AllowanceType {
+  FIXED_MONTHLY     // Cố định tháng
+  PER_SESSION       // Theo ca dạy
+  MANUAL            // Nhập tay đột xuất
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+// ==========================================
+// 1. MOD-CORE: LÕI HỆ THỐNG & NGƯỜI DÙNG
+// ==========================================
+
+model Branch {
+  id               String       @id @default(uuid())
+  code             String       @unique
+  name             String
+  address          String
+  gpsLatitude      Decimal      @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude     Decimal      @map("gps_longitude") @db.Decimal(10, 7)
+  gpsRadiusMeters  Int          @default(150) @map("gps_radius_meters")
+  status           String       @default("ACTIVE")
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  users            User[]
+  leads            Lead[]
+  students         Student[]
+  classes          Class[]
+  stocks           BranchStock[]
+  orders           Order[]
+
+  @@map("branches")
+}
+
+model User {
+  id                    String            @id @default(uuid())
+  branchId              String            @map("branch_id")
+  branch                Branch            @relation(fields: [branchId], references: [id])
+  role                  UserRole
+  fullName              String            @map("full_name")
+  phone                 String            @unique
+  email                 String            @unique
+  passwordHash          String            @map("password_hash")
+  contractType          ContractType      @default(FULLTIME) @map("contract_type")
+  baseSalary            Decimal           @default(0) @map("base_salary") @db.Decimal(12, 2)
+  standardMonthlyHours  Decimal           @default(160) @map("standard_monthly_hours") @db.Decimal(5, 2)
+  hourlyTeachingRate    Decimal           @default(0) @map("hourly_teaching_rate") @db.Decimal(12, 2)
+  status                String            @default("ACTIVE")
+  createdAt             DateTime          @default(now()) @map("created_at")
+
+  assignedLeads         Lead[]            @relation("AssignedSale")
+  trialSessions         TrialSession[]    @relation("TrialTeacher")
+  mainClasses           Class[]           @relation("MainTeacher")
+  assignedEnrollments   Enrollment[]      @relation("AssignedTeacher")
+  conductedSessions     ClassSession[]    @relation("SessionTeacher")
+  gradedAssessments     StudentAssessment[] @relation("GradedBy")
+  payrolls              Payroll[]
+  adminTimesheets       AdminTimesheet[]
+
+  @@map("users")
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String   @map("entity_id")
+  oldData   Json?    @map("old_data")
+  newData   Json?    @map("new_data")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// 2. MOD-CRM: KHÁCH HÀNG TIỀM NĂNG & HỌC THỬ
+// ==========================================
+
+model Lead {
+  id                 String         @id @default(uuid())
+  branchId           String         @map("branch_id")
+  branch             Branch         @relation(fields: [branchId], references: [id])
+  parentName         String         @map("parent_name")
+  parentPhone        String         @map("parent_phone")
+  studentName        String         @map("student_name")
+  studentDob         DateTime?      @map("student_dob")
+  interestedSubject  String?        @map("interested_subject") // Toán trí tuệ / Kỹ năng sống
+  leadSource         String?        @map("lead_source")
+  assignedUserId     String?        @map("assigned_user_id")
+  assignedUser       User?          @relation("AssignedSale", fields: [assignedUserId], references: [id])
+  status             LeadStatus     @default(NEW)
+  convertedStudentId String?        @map("converted_student_id")
+  convertedStudent   Student?       @relation("ConvertedFromLead", fields: [convertedStudentId], references: [id])
+  notes              String?
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  trialSessions      TrialSession[]
+
+  @@index([branchId, status])
+  @@index([parentPhone])
+  @@map("leads")
+}
+
+model TrialSession {
+  id                String            @id @default(uuid())
+  leadId            String            @map("lead_id")
+  lead              Lead              @relation(fields: [leadId], references: [id])
+  classSessionId    String?           @map("class_session_id")
+  classSession      ClassSession?     @relation(fields: [classSessionId], references: [id])
+  teacherId         String?           @map("teacher_id")
+  teacher           User?             @relation("TrialTeacher", fields: [teacherId], references: [id])
+  trialDate         DateTime          @map("trial_date")
+  attendanceStatus  AttendanceStatus  @default(PRESENT) @map("attendance_status")
+  entryTestScore    Decimal?          @map("entry_test_score") @db.Decimal(5, 2)
+  teacherEvaluation String?           @map("teacher_evaluation")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  @@map("trial_sessions")
+}
+
+// ==========================================
+// 3. MOD-CATALOG: KHOÁ HỌC, COMBO & LỚP HỌC
+// ==========================================
+
+model Course {
+  id              String         @id @default(uuid())
+  courseCode      String         @unique @map("course_code")
+  name            String
+  subjectType     String         @map("subject_type") // TOAN_TRI_TUE, KY_NANG_SONG
+  levelOrder      Int            @default(1) @map("level_order")
+  totalSessions   Int            @default(24) @map("total_sessions")
+  standardMonths  Int            @default(3) @map("standard_months")
+  maxMonths       Int            @default(4) @map("max_months")
+  tuitionFee      Decimal        @map("tuition_fee") @db.Decimal(12, 2)
+  status          String         @default("ACTIVE")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  classes         Class[]
+  enrollments     Enrollment[]
+  comboItems      ComboItem[]
+
+  @@map("courses")
+}
+
+model CourseCombo {
+  id            String       @id @default(uuid())
+  comboCode     String       @unique @map("combo_code")
+  name          String
+  totalCourses  Int          @map("total_courses")
+  originalPrice Decimal      @map("original_price") @db.Decimal(12, 2)
+  comboPrice    Decimal      @map("combo_price") @db.Decimal(12, 2)
+  status        String       @default("ACTIVE")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  items         ComboItem[]
+  enrollments   Enrollment[]
+
+  @@map("course_combos")
+}
+
+model ComboItem {
+  id            String       @id @default(uuid())
+  comboId       String       @map("combo_id")
+  combo         CourseCombo  @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  courseId      String       @map("course_id")
+  course        Course       @relation(fields: [courseId], references: [id])
+  sequenceOrder Int          @map("sequence_order") // 1, 2, 3...
+
+  @@unique([comboId, sequenceOrder])
+  @@map("combo_items")
+}
+
+model Class {
+  id              String         @id @default(uuid())
+  classCode       String         @unique @map("class_code")
+  courseId        String         @map("course_id")
+  course          Course         @relation(fields: [courseId], references: [id])
+  branchId        String         @map("branch_id")
+  branch          Branch         @relation(fields: [branchId], references: [id])
+  roomName        String         @map("room_name")
+  mainTeacherId   String         @map("main_teacher_id")
+  mainTeacher     User           @relation("MainTeacher", fields: [mainTeacherId], references: [id])
+  scheduleDays    String         @map("schedule_days") // "2,4,6" hoặc "3,5,7"
+  scheduleTime    String         @map("schedule_time") // "17:30 - 19:00"
+  startDate       DateTime       @map("start_date")
+  expectedEndDate DateTime?      @map("expected_end_date")
+  maxStudents     Int            @default(15) @map("max_students")
+  status          String         @default("ACTIVE")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  sessions        ClassSession[]
+  enrollments     Enrollment[]
+
+  @@map("classes")
+}
+
+// ==========================================
+// 4. MOD-INV: SẢN PHẨM & KHO VẬT TƯ
+// ==========================================
+
+model Product {
+  id           String        @id @default(uuid())
+  sku          String        @unique
+  name         String
+  unit         String        @default("Cái") // Quyển, Cái, Bộ
+  costPrice    Decimal       @map("cost_price") @db.Decimal(12, 2)
+  sellingPrice Decimal       @map("selling_price") @db.Decimal(12, 2)
+  status       String        @default("ACTIVE")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  branchStocks BranchStock[]
+  orderItems   OrderItem[]
+  logs         InventoryLog[]
+
+  @@map("products")
+}
+
+model BranchStock {
+  id        String   @id @default(uuid())
+  branchId  String   @map("branch_id")
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([branchId, productId])
+  @@map("branch_stocks")
+}
+
+model InventoryLog {
+  id          String   @id @default(uuid())
+  branchId    String   @map("branch_id")
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+  changeQty   Int      @map("change_qty") // Dương là nhập, âm là xuất bán
+  actionType  String   @map("action_type") // IMPORT, POS_SALE, ADJUSTMENT
+  referenceId String?  @map("reference_id") // OrderId hoặc ImportBatchId
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("inventory_logs")
+}
+
+// ==========================================
+// 5. MOD-POS: ĐƠN HÀNG, THU NGÂN & TRẢ GÓP
+// ==========================================
+
+model Order {
+  id               String               @id @default(uuid())
+  orderCode        String               @unique @map("order_code")
+  studentId        String               @map("student_id")
+  student          Student              @relation(fields: [studentId], references: [id])
+  branchId         String               @map("branch_id")
+  branch           Branch               @relation(fields: [branchId], references: [id])
+  totalTuitionFee  Decimal              @default(0) @map("total_tuition_fee") @db.Decimal(12, 2)
+  totalProductFee  Decimal              @default(0) @map("total_product_fee") @db.Decimal(12, 2)
+  discountAmount   Decimal              @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  finalTotal       Decimal              @map("final_total") @db.Decimal(12, 2)
+  paidAmount       Decimal              @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  remainingDebt    Decimal              @default(0) @map("remaining_debt") @db.Decimal(12, 2)
+  paymentStatus    OrderStatus          @default(DRAFT) @map("payment_status")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  items            OrderItem[]
+  installments     PaymentInstallment[]
+  enrollments      Enrollment[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String   @map("order_id")
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemType    String   @map("item_type") // COURSE, COMBO, PRODUCT
+  referenceId String   @map("reference_id") // CourseId, ComboId, ProductId
+  product     Product? @relation(fields: [productId], references: [id])
+  productId   String?  @map("product_id")
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
+  totalPrice  Decimal  @map("total_price") @db.Decimal(12, 2)
+
+  @@map("order_items")
+}
+
+model PaymentInstallment {
+  id             String            @id @default(uuid())
+  orderId        String            @map("order_id")
+  order          Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  installmentNo  Int               @map("installment_no") // Đợt 1, 2, 3
+  amount         Decimal           @db.Decimal(12, 2)
+  dueDate        DateTime          @map("due_date")
+  paidAt         DateTime?         @map("paid_at")
+  paymentMethod  PaymentMethod?    @map("payment_method")
+  transactionRef String?           @map("transaction_ref")
+  qrCodeString   String?           @map("qr_code_string")
+  proofImageUrl  String?           @map("proof_image_url") // Ảnh chụp biên lai chuyển khoản
+  proofNote      String?           @map("proof_note")      // Ghi chú kiểm tra của kế toán
+  confirmedBy    String?           @map("confirmed_by")    // Kế toán duyệt xác nhận
+  isProvisionallyApproved Boolean           @default(false) @map("is_provisionally_approved") // Đã hạch toán tạm
+  provisionalAt           DateTime?         @map("provisional_at") // Thời gian hạch toán tạm
+  autoVerified            Boolean           @default(false) @map("auto_verified") // Đã qua kiểm tra tự động
+  autoVerifyDetails       Json?             @map("auto_verify_details") // Kết quả đối soát tự động
+  finalConfirmedAt        DateTime?         @map("final_confirmed_at") // Kế toán xác nhận tiền nổi vào tài khoản
+  finalConfirmedBy        String?           @map("final_confirmed_by") // Kế toán xác nhận hoàn tất
+  status         InstallmentStatus @default(PENDING)
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  @@map("payment_installments")
+}
+
+// ==========================================
+// 6. MOD-ACAD: HỌC VIÊN, TIẾN ĐỘ, BẢO LƯU & THI
+// ==========================================
+
+model Student {
+  id             String         @id @default(uuid())
+  studentCode    String         @unique @map("student_code")
+  branchId       String         @map("branch_id")
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  fullName       String         @map("full_name")
+  dob            DateTime?
+  gender         String?
+  parentName     String         @map("parent_name")
+  parentPhone    String         @map("parent_phone")
+  zaloUid        String?        @map("zalo_uid")
+  status         String         @default("ACTIVE")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  leads          Lead[]         @relation("ConvertedFromLead")
+  orders         Order[]
+  enrollments    Enrollment[]
+  attendances    Attendance[]
+  assessments    StudentAssessment[]
+  reservations   Reservation[]
+
+  @@index([parentPhone])
+  @@map("students")
+}
+
+model Enrollment {
+  id                      String            @id @default(uuid())
+  studentId               String            @map("student_id")
+  student                 Student           @relation(fields: [studentId], references: [id])
+  orderId                 String?           @map("order_id")
+  order                   Order?            @relation(fields: [orderId], references: [id])
+  comboId                 String?           @map("combo_id")
+  combo                   CourseCombo?      @relation(fields: [comboId], references: [id])
+  sequenceInCombo         Int?              @map("sequence_in_combo")
+  courseId                String            @map("course_id")
+  course                  Course            @relation(fields: [courseId], references: [id])
+  currentClassId          String?           @map("current_class_id")
+  currentClass            Class?            @relation(fields: [currentClassId], references: [id])
+  assignedTeacherId       String?           @map("assigned_teacher_id")
+  assignedTeacher         User?             @relation("AssignedTeacher", fields: [assignedTeacherId], references: [id])
+  totalSessions           Int               @default(24) @map("total_sessions")
+  attendedSessions        Int               @default(0) @map("attended_sessions")
+  makeupPendingSessions   Int               @default(0) @map("makeup_pending_sessions")
+  remainingSessions       Int               @default(24) @map("remaining_sessions")
+  activationDate          DateTime?         @map("activation_date") // T0: Ngày học buổi đầu tiên
+  standardDeadlineDate    DateTime?         @map("standard_deadline_date") // T0 + 3 tháng (Xét KPI)
+  maxExpiredDate          DateTime?         @map("max_expired_date") // T0 + 4 tháng (+ bù ngày bảo lưu)
+  completionDate          DateTime?         @map("completion_date")
+  isQualifiedForNextLevel Boolean           @default(false) @map("is_qualified_for_next_level")
+  isOnTimeLevelUp         Boolean           @default(false) @map("is_on_time_level_up")
+  status                  EnrollmentStatus  @default(WAITING_IN_QUEUE)
+  createdAt               DateTime          @default(now()) @map("created_at")
+
+  attendances             Attendance[]
+  assessments             StudentAssessment[]
+  reservations            Reservation[]
+
+  @@index([studentId, status])
+  @@map("enrollments")
+}
+
+model StudentAssessment {
+  id                String         @id @default(uuid())
+  enrollmentId      String         @map("enrollment_id")
+  enrollment        Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  studentId         String         @map("student_id")
+  student           Student        @relation(fields: [studentId], references: [id])
+  teacherId         String         @map("teacher_id")
+  teacher           User           @relation("GradedBy", fields: [teacherId], references: [id])
+  testType          AssessmentType @map("test_type")
+  sessionNumber     Int            @map("session_number") // 1, 12, 24
+  testDate          DateTime       @default(now()) @map("test_date")
+  score             Decimal        @db.Decimal(5, 2)
+  evaluationDetails String?        @map("evaluation_details")
+  isPassed          Boolean        @default(false) @map("is_passed")
+  attachmentUrls    String[]       @map("attachment_urls")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  @@unique([enrollmentId, testType])
+  @@map("student_assessments")
+}
+
+model Reservation {
+  id               String      @id @default(uuid())
+  enrollmentId     String      @map("enrollment_id")
+  enrollment       Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  studentId        String      @map("student_id")
+  student          Student     @relation(fields: [studentId], references: [id])
+  startDate        DateTime    @map("start_date")
+  endDate          DateTime    @map("end_date")
+  actualResumeDate DateTime?   @map("actual_resume_date")
+  extendedDays     Int         @default(0) @map("extended_days")
+  reason           String?
+  approvedBy       String?     @map("approved_by")
+  status           String      @default("ACTIVE") // ACTIVE, RESUMED, CANCELLED
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  @@map("reservations")
+}
+
+// ==========================================
+// 7. MOD-ATTEND: ĐIỂM DANH GPS & LỊCH DẠY
+// ==========================================
+
+model ClassSession {
+  id             String         @id @default(uuid())
+  classId        String         @map("class_id")
+  class          Class          @relation(fields: [classId], references: [id])
+  sessionNumber  Int            @map("session_number") // 1 -> 24
+  sessionDate    DateTime       @map("session_date")
+  startTime      String         @map("start_time") // "17:30"
+  endTime        String         @map("end_time")   // "19:00"
+  durationHours  Decimal        @default(1.5) @map("duration_hours") @db.Decimal(4, 2)
+  teacherId      String         @map("teacher_id")
+  teacher        User           @relation("SessionTeacher", fields: [teacherId], references: [id])
+  checkinTime    DateTime?      @map("checkin_time")
+  checkinLat     Decimal?       @map("checkin_lat") @db.Decimal(10, 7)
+  checkinLng     Decimal?       @map("checkin_lng") @db.Decimal(10, 7)
+  isGpsValid     Boolean        @default(false) @map("is_gps_valid")
+  sessionStatus  String         @default("SCHEDULED") @map("session_status") // SCHEDULED, COMPLETED, CANCELLED
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  attendances    Attendance[]
+  trialSessions  TrialSession[]
+
+  @@unique([classId, sessionNumber])
+  @@index([teacherId, sessionDate])
+  @@map("class_sessions")
+}
+
+model Attendance {
+  id               String           @id @default(uuid())
+  classSessionId   String           @map("class_session_id")
+  classSession     ClassSession     @relation(fields: [classSessionId], references: [id])
+  studentId        String           @map("student_id")
+  student          Student          @relation(fields: [studentId], references: [id])
+  enrollmentId     String           @map("enrollment_id")
+  enrollment       Enrollment       @relation(fields: [enrollmentId], references: [id])
+  attendanceType   AttendanceType   @default(REGULAR) @map("attendance_type")
+  status           AttendanceStatus @default(PRESENT)
+  teacherComment   String?          @map("teacher_comment")
+  activityPhotos   String[]         @map("activity_photos")
+  zaloZnsSent      Boolean          @default(false) @map("zalo_zns_sent")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@unique([classSessionId, studentId])
+  @@map("attendances")
+}
+
+// ==========================================
+// 8. MOD-PAYROLL: NHÂN SỰ, KPI & TÍNH LƯƠNG
+// ==========================================
+
+model AllowanceConfig {
+  id            String        @id @default(uuid())
+  name          String
+  allowanceType AllowanceType @map("allowance_type")
+  defaultAmount Decimal       @map("default_amount") @db.Decimal(12, 2)
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  items         PayrollItem[]
+
+  @@map("allowance_configs")
+}
+
+model AdminTimesheet {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id])
+  workDate     DateTime @map("work_date")
+  hoursWorked  Decimal  @map("hours_worked") @db.Decimal(5, 2)
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admin_timesheets")
+}
+
+model Payroll {
+  id                        String        @id @default(uuid())
+  userId                    String        @map("user_id")
+  user                      User          @relation(fields: [userId], references: [id])
+  month                     Int
+  year                      Int
+  contractTypeSnapshot      ContractType  @map("contract_type_snapshot")
+  totalTeachingHours        Decimal       @default(0) @map("total_teaching_hours") @db.Decimal(6, 2)
+  totalAdminHours           Decimal       @default(0) @map("total_admin_hours") @db.Decimal(6, 2)
+  workingSalaryAmount       Decimal       @default(0) @map("working_salary_amount") @db.Decimal(12, 2)
+  newStudentCount           Int           @default(0) @map("new_student_count")
+  newStudentBonusAmount     Decimal       @default(0) @map("new_student_bonus_amount") @db.Decimal(12, 2)
+  onTimeLevelupCount        Int           @default(0) @map("on_time_levelup_count")
+  onTimeLevelupBonusAmount  Decimal       @default(0) @map("on_time_levelup_bonus_amount") @db.Decimal(12, 2)
+  totalOptionalAllowances   Decimal       @default(0) @map("total_optional_allowances") @db.Decimal(12, 2)
+  totalDeductions           Decimal       @default(0) @map("total_deductions") @db.Decimal(12, 2)
+  netSalary                 Decimal       @default(0) @map("net_salary") @db.Decimal(12, 2)
+  status                    PayrollStatus @default(DRAFT)
+  createdAt                 DateTime      @default(now()) @map("created_at")
+
+  items                     PayrollItem[]
+
+  @@unique([userId, month, year])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id                String           @id @default(uuid())
+  payrollId         String           @map("payroll_id")
+  payroll           Payroll          @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  allowanceConfigId String?          @map("allowance_config_id")
+  allowanceConfig   AllowanceConfig? @relation(fields: [allowanceConfigId], references: [id])
+  title             String
+  amount            Decimal          @db.Decimal(12, 2)
+  isDeduction       Boolean          @default(false) @map("is_deduction")
+  note              String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  @@map("payroll_items")
+}
+
+// ==========================================
+// 9. MOD-PLUGIN: WEBHOOK & ZNS LOGS
+// ==========================================
+
+model WebhookLog {
+  id             String   @id @default(uuid())
+  source         String   // VIETQR, SEPAY, CASSO
+  payload        Json
+  isProcessed    Boolean  @default(false) @map("is_processed")
+  transactionRef String?  @map("transaction_ref")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("webhook_logs")
+}
+
+model ZnsLog {
+  id           String   @id @default(uuid())
+  phone        String
+  templateId   String   @map("template_id")
+  params       Json
+  status       String   // SENT, FAILED
+  response     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("zns_logs")
+}

@@ -1,0 +1,39 @@
+services:
+  # Backend Web Service
+  - type: web
+    name: ems-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma db push && npm run prisma:seed && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ems-postgres
+          property: connectionString
+
+  # Frontend Static Site
+  - type: web
+    name: ems-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: ems-backend
+          property: host
+
+databases:
+  - name: ems-postgres
+    databaseName: ems_db
+    user: ems_user
+    plan: free
