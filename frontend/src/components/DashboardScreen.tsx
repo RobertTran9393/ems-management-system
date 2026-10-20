@@ -25,8 +25,83 @@ import {
   Save,
   Search,
   Filter,
+  Briefcase,
+  Calculator,
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
+
+export const ROLE_DISPLAY_MAP: Record<
+  string,
+  {
+    label: string;
+    shortLabel: string;
+    badgeClass: string;
+    desc: string;
+    presets: { label: string; rev: number; newSt: number }[];
+  }
+> = {
+  SALE: {
+    label: 'Tư Vấn Tuyển Sinh (Sale)',
+    shortLabel: 'Tư Vấn Tuyển Sinh',
+    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+    desc: 'Chỉ tiêu doanh số học phí & tuyển mới học viên',
+    presets: [
+      { label: '30Tr / 10 bé', rev: 30000000, newSt: 10 },
+      { label: '50Tr / 15 bé', rev: 50000000, newSt: 15 },
+      { label: '70Tr / 20 bé', rev: 70000000, newSt: 20 },
+    ],
+  },
+  TEACHER: {
+    label: 'Giáo Viên (Teacher)',
+    shortLabel: 'Giáo Viên',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+    desc: 'Chỉ tiêu tái tục, doanh thu học phần & phụ huynh giới thiệu',
+    presets: [
+      { label: '20Tr / 6 bé', rev: 20000000, newSt: 6 },
+      { label: '30Tr / 10 bé', rev: 30000000, newSt: 10 },
+      { label: '50Tr / 15 bé', rev: 50000000, newSt: 15 },
+    ],
+  },
+  ACADEMIC_AFFAIRS: {
+    label: 'Giáo Vụ (Academic Affairs)',
+    shortLabel: 'Giáo Vụ',
+    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    desc: 'Chỉ tiêu duy trì sĩ số, chuyển đổi lớp & hỗ trợ tuyển sinh',
+    presets: [
+      { label: '15Tr / 5 bé', rev: 15000000, newSt: 5 },
+      { label: '25Tr / 8 bé', rev: 25000000, newSt: 8 },
+    ],
+  },
+  ACCOUNTANT: {
+    label: 'Kế Toán (Accountant)',
+    shortLabel: 'Kế Toán',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    desc: 'Chỉ tiêu đôn đốc công nợ & hỗ trợ thu ngân POS',
+    presets: [
+      { label: '10Tr / 3 bé', rev: 10000000, newSt: 3 },
+      { label: '20Tr / 5 bé', rev: 20000000, newSt: 5 },
+    ],
+  },
+  BRANCH_MANAGER: {
+    label: 'Quản Lý Cơ Sở (Branch Manager)',
+    shortLabel: 'Quản Lý Cơ Sở',
+    badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+    desc: 'Chỉ tiêu doanh thu cơ sở & phát triển học sinh',
+    presets: [
+      { label: '80Tr / 25 bé', rev: 80000000, newSt: 25 },
+      { label: '100Tr / 30 bé', rev: 100000000, newSt: 30 },
+    ],
+  },
+  ADMIN: {
+    label: 'Quản Trị Viên (Admin)',
+    shortLabel: 'Quản Trị Viên',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
+    desc: 'Chỉ tiêu điều hành & giám sát hệ thống',
+    presets: [
+      { label: 'Không giao', rev: 0, newSt: 0 },
+    ],
+  },
+};
 
 export const DashboardScreen: React.FC = () => {
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'custom'>('month');
@@ -49,8 +124,9 @@ export const DashboardScreen: React.FC = () => {
   const [editingTargetNew, setEditingTargetNew] = useState<number>(30);
   const [savingTarget, setSavingTarget] = useState<boolean>(false);
 
-  // Staff Target Assignment Modal State (Per Employee)
+  // Staff Target Assignment Modal State (Per Employee & Per Role)
   const [showStaffTargetModal, setShowStaffTargetModal] = useState<boolean>(false);
+  const [staffTargetModalTab, setStaffTargetModalTab] = useState<'BY_ROLE' | 'BY_STAFF'>('BY_ROLE');
   const [staffTargetMonth, setStaffTargetMonth] = useState<number>(new Date().getMonth() + 1);
   const [staffTargetYear, setStaffTargetYear] = useState<number>(new Date().getFullYear());
   const [staffTargetBranchId, setStaffTargetBranchId] = useState<string>('all');
@@ -58,6 +134,17 @@ export const DashboardScreen: React.FC = () => {
   const [loadingStaffTargets, setLoadingStaffTargets] = useState<boolean>(false);
   const [savingStaffTargets, setSavingStaffTargets] = useState<boolean>(false);
   const [staffSearchQuery, setStaffSearchQuery] = useState<string>('');
+  const [modalRoleFilter, setModalRoleFilter] = useState<string>('all');
+  const [leaderboardRoleFilter, setLeaderboardRoleFilter] = useState<string>('all');
+  const [appliedRoleToast, setAppliedRoleToast] = useState<string | null>(null);
+  const [roleTargetInputs, setRoleTargetInputs] = useState<Record<string, { targetRevenue: number; targetNewStudents: number }>>({
+    SALE: { targetRevenue: 50000000, targetNewStudents: 15 },
+    TEACHER: { targetRevenue: 30000000, targetNewStudents: 10 },
+    ACADEMIC_AFFAIRS: { targetRevenue: 20000000, targetNewStudents: 5 },
+    ACCOUNTANT: { targetRevenue: 10000000, targetNewStudents: 3 },
+    BRANCH_MANAGER: { targetRevenue: 80000000, targetNewStudents: 25 },
+    ADMIN: { targetRevenue: 0, targetNewStudents: 0 },
+  });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('ems_user');
@@ -198,7 +285,28 @@ export const DashboardScreen: React.FC = () => {
       });
       const json = await res.json();
       if (json.success && json.data) {
-        setStaffTargetList(json.data.staffTargets || []);
+        const list = json.data.staffTargets || [];
+        setStaffTargetList(list);
+
+        // Prepopulate role targets if any are set on staff
+        setRoleTargetInputs((prev) => {
+          const updated = { ...prev };
+          list.forEach((st: any) => {
+            const r = st.role;
+            if (r) {
+              if (!updated[r]) {
+                updated[r] = { targetRevenue: 0, targetNewStudents: 0 };
+              }
+              if (Number(st.targetRevenue) > 0 && updated[r].targetRevenue === 0) {
+                updated[r].targetRevenue = Number(st.targetRevenue);
+              }
+              if (Number(st.targetNewStudents) > 0 && updated[r].targetNewStudents === 0) {
+                updated[r].targetNewStudents = Number(st.targetNewStudents);
+              }
+            }
+          });
+          return updated;
+        });
       }
     } catch (e) {
       console.error('Failed to fetch staff targets:', e);
@@ -207,15 +315,73 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
-  const handleOpenStaffTargetModal = () => {
+  const handleOpenStaffTargetModal = (tab: 'BY_ROLE' | 'BY_STAFF' = 'BY_ROLE') => {
     const d = new Date(selectedDate || Date.now());
     const m = d.getMonth() + 1;
     const y = d.getFullYear();
     setStaffTargetMonth(m);
     setStaffTargetYear(y);
     setStaffTargetBranchId(selectedBranchId);
+    setStaffTargetModalTab(tab);
     setShowStaffTargetModal(true);
     fetchStaffTargets(m, y, selectedBranchId);
+  };
+
+  const handleUpdateRoleTargetInput = (role: string, field: 'targetRevenue' | 'targetNewStudents', val: number) => {
+    setRoleTargetInputs((prev) => ({
+      ...prev,
+      [role]: {
+        ...(prev[role] || { targetRevenue: 0, targetNewStudents: 0 }),
+        [field]: val,
+      },
+    }));
+  };
+
+  const handleApplyRoleTarget = (role: string) => {
+    const target = roleTargetInputs[role];
+    if (!target) return;
+    const rev = Number(target.targetRevenue) || 0;
+    const newSt = Math.floor(Number(target.targetNewStudents)) || 0;
+
+    let count = 0;
+    setStaffTargetList((prev) =>
+      prev.map((item) => {
+        if (item.role === role) {
+          count++;
+          return {
+            ...item,
+            targetRevenue: rev,
+            targetNewStudents: newSt,
+          };
+        }
+        return item;
+      })
+    );
+
+    const roleName = ROLE_DISPLAY_MAP[role]?.shortLabel || role;
+    setAppliedRoleToast(`✓ Đã áp dụng ${rev.toLocaleString('vi-VN')} đ & ${newSt} bé cho ${count} nhân sự vị trí ${roleName}`);
+    setTimeout(() => setAppliedRoleToast(null), 3000);
+  };
+
+  const handleApplyAllRoleTargets = () => {
+    let totalCount = 0;
+    setStaffTargetList((prev) =>
+      prev.map((item) => {
+        const target = roleTargetInputs[item.role];
+        if (target && (target.targetRevenue > 0 || target.targetNewStudents > 0)) {
+          totalCount++;
+          return {
+            ...item,
+            targetRevenue: Number(target.targetRevenue) || 0,
+            targetNewStudents: Math.floor(Number(target.targetNewStudents)) || 0,
+          };
+        }
+        return item;
+      })
+    );
+
+    setAppliedRoleToast(`✓ Đã áp dụng định mức theo từng vị trí cho toàn bộ ${totalCount} nhân sự!`);
+    setTimeout(() => setAppliedRoleToast(null), 3000);
   };
 
   const handleUpdateStaffTarget = (userId: string, field: 'targetRevenue' | 'targetNewStudents' | 'note', val: any) => {
@@ -479,16 +645,26 @@ export const DashboardScreen: React.FC = () => {
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {!isTeacher && (
-              <button
-                type="button"
-                onClick={handleOpenStaffTargetModal}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition cursor-pointer"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Giao Chỉ Tiêu Nhân Viên</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleOpenStaffTargetModal('BY_ROLE')}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Giao Theo Vị Trí</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenStaffTargetModal('BY_STAFF')}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Chi Tiết Nhân Sự</span>
+                </button>
+              </>
             )}
 
             <button
@@ -825,15 +1001,62 @@ export const DashboardScreen: React.FC = () => {
             </div>
 
             {!isTeacher && (
-              <button
-                type="button"
-                onClick={handleOpenStaffTargetModal}
-                className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Chỉnh Sửa Chỉ Tiêu Nhân Sự</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleOpenStaffTargetModal('BY_ROLE')}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Giao Chỉ Tiêu Theo Vị Trí</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenStaffTargetModal('BY_STAFF')}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Chỉnh Sửa Từng Nhân Sự</span>
+                </button>
+              </div>
             )}
+          </div>
+
+          {/* Role Filter Pills for Leaderboard */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+            <span className="text-slate-400 font-medium text-[11px] shrink-0 mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3" /> Lọc theo vị trí:
+            </span>
+            <button
+              type="button"
+              onClick={() => setLeaderboardRoleFilter('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                leaderboardRoleFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Tất Cả ({metrics.staffLeaderboard.length})
+            </button>
+            {Object.keys(ROLE_DISPLAY_MAP).map((rKey) => {
+              const count = metrics.staffLeaderboard.filter((s: any) => s.role === rKey).length;
+              if (count === 0) return null;
+              const meta = ROLE_DISPLAY_MAP[rKey];
+              return (
+                <button
+                  key={rKey}
+                  type="button"
+                  onClick={() => setLeaderboardRoleFilter(rKey)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap cursor-pointer ${
+                    leaderboardRoleFilter === rKey
+                      ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {meta.shortLabel} ({count})
+                </button>
+              );
+            })}
           </div>
 
           <div className="overflow-x-auto">
@@ -850,7 +1073,9 @@ export const DashboardScreen: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {metrics.staffLeaderboard.map((st: any, idx: number) => {
+                {metrics.staffLeaderboard
+                  .filter((st: any) => leaderboardRoleFilter === 'all' || st.role === leaderboardRoleFilter)
+                  .map((st: any, idx: number) => {
                   return (
                     <tr key={st.userId} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 px-3">
@@ -1481,25 +1706,25 @@ export const DashboardScreen: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: GIAO CHỈ TIÊU HÀNG THÁNG CHO TỪNG NHÂN VIÊN */}
+      {/* MODAL 2: GIAO CHỈ TIÊU HÀNG THÁNG CHO TỪNG NHÂN VIÊN & VỊ TRÍ */}
       {showStaffTargetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col my-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col my-auto">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold shadow-xs">
-                  <Users className="w-5 h-5" />
+                  <Briefcase className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                    Thiết Lập Chỉ Tiêu Hàng Tháng Cho Từng Nhân Viên
+                    Thiết Lập & Giao Chỉ Tiêu Hàng Tháng
                     <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                      Tự Động Cộng Dồn
+                      Giao Theo Vị Trí & Nhân Sự
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Chỉ tiêu của trung tâm sẽ tự động được tổng hợp từ tổng các chỉ tiêu của từng nhân sự
+                    Linh hoạt giao theo từng vị trí (Sale, Giáo viên, Giáo vụ...) hoặc điều chỉnh chi tiết từng nhân sự
                   </p>
                 </div>
               </div>
@@ -1514,7 +1739,7 @@ export const DashboardScreen: React.FC = () => {
             </div>
 
             {/* Filter Bar: Month, Year, Branch */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200/80 shrink-0">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80 shrink-0">
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 mb-1">Tháng Áp Dụng:</label>
                 <select
@@ -1582,25 +1807,361 @@ export const DashboardScreen: React.FC = () => {
               </div>
             </div>
 
+            {/* Modal Tabs Switcher */}
+            <div className="flex items-center justify-between border-b border-slate-200 shrink-0 gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStaffTargetModalTab('BY_ROLE')}
+                  className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-1.5 border-b-2 transition cursor-pointer ${
+                    staffTargetModalTab === 'BY_ROLE'
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>Giao Theo Từng Vị Trí</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-800 font-bold">
+                    Nhanh & Chuẩn Hóa
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStaffTargetModalTab('BY_STAFF')}
+                  className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-1.5 border-b-2 transition cursor-pointer ${
+                    staffTargetModalTab === 'BY_STAFF'
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Chi Tiết Từng Nhân Viên ({staffTargetList.length})</span>
+                </button>
+              </div>
+
+              {appliedRoleToast && (
+                <div className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl flex items-center gap-1.5 animate-in fade-in">
+                  <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{appliedRoleToast}</span>
+                </div>
+              )}
+            </div>
+
+            {/* TAB 1: GIAO CHỈ TIÊU THEO TỪNG VỊ TRÍ */}
+            {staffTargetModalTab === 'BY_ROLE' && (
+              <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 min-h-[300px]">
+                <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 p-3 rounded-2xl text-xs text-blue-900">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>
+                      Nhập định mức chỉ tiêu chung cho từng vị trí, sau đó bấm <strong>"Áp Dụng Cho Vị Trí"</strong> để gán tự động cho tất cả nhân sự thuộc vị trí đó.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyAllRoleTargets}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 shadow-xs transition cursor-pointer flex items-center gap-1"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Áp Dụng Cho Tất Cả Vị Trí</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {Object.keys(ROLE_DISPLAY_MAP).map((rKey) => {
+                    const roleMeta = ROLE_DISPLAY_MAP[rKey];
+                    const staffInRole = staffTargetList.filter((s) => s.role === rKey);
+                    const currentInput = roleTargetInputs[rKey] || { targetRevenue: 0, targetNewStudents: 0 };
+                    const subtotalRev = (Number(currentInput.targetRevenue) || 0) * staffInRole.length;
+                    const subtotalNew = (Number(currentInput.targetNewStudents) || 0) * staffInRole.length;
+
+                    return (
+                      <div
+                        key={rKey}
+                        className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs hover:border-indigo-300 transition"
+                      >
+                        {/* Role Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${roleMeta.badgeClass}`}>
+                              {roleMeta.shortLabel}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              ({staffInRole.length} nhân sự)
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleApplyRoleTarget(rKey)}
+                            disabled={staffInRole.length === 0}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] border border-indigo-200 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            <CheckCheck className="w-3 h-3" />
+                            <span>Áp Dụng ({staffInRole.length})</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 leading-tight">
+                          {roleMeta.desc}
+                        </p>
+
+                        {/* Inputs: Target Revenue & New Students */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                              Doanh Số / Người:
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000000"
+                              value={currentInput.targetRevenue}
+                              onChange={(e) =>
+                                handleUpdateRoleTargetInput(rKey, 'targetRevenue', Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
+                            />
+                            <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                              {Number(currentInput.targetRevenue || 0).toLocaleString('vi-VN')} đ
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                              Bé Mới / Người:
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={currentInput.targetNewStudents}
+                              onChange={(e) =>
+                                handleUpdateRoleTargetInput(rKey, 'targetNewStudents', Number(e.target.value))
+                              }
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-amber-700 outline-none focus:border-indigo-500"
+                            />
+                            <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                              {currentInput.targetNewStudents || 0} học viên
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Presets */}
+                        {roleMeta.presets && roleMeta.presets.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap pt-1">
+                            <span className="text-[10px] text-slate-400 font-semibold mr-0.5">Gợi ý:</span>
+                            {roleMeta.presets.map((p, pIdx) => (
+                              <button
+                                key={pIdx}
+                                type="button"
+                                onClick={() => {
+                                  handleUpdateRoleTargetInput(rKey, 'targetRevenue', p.rev);
+                                  handleUpdateRoleTargetInput(rKey, 'targetNewStudents', p.newSt);
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition cursor-pointer"
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Role Subtotal calculation preview */}
+                        <div className="bg-slate-50 p-2 rounded-xl text-[11px] flex items-center justify-between text-slate-600 font-medium border border-slate-100">
+                          <span>Tổng {staffInRole.length} nhân sự vị trí này:</span>
+                          <span className="font-bold text-slate-800">
+                            <strong className="text-indigo-600">{subtotalRev.toLocaleString('vi-VN')} đ</strong> •{' '}
+                            <strong className="text-amber-600">{subtotalNew} bé</strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: CHI TIẾT TỪNG NHÂN VIÊN */}
+            {staffTargetModalTab === 'BY_STAFF' && (
+              <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                {/* Role Filter & Quick Presets */}
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs shrink-0">
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                      <Filter className="w-3 h-3" /> Lọc vị trí:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModalRoleFilter('all')}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                        modalRoleFilter === 'all'
+                          ? 'bg-indigo-600 text-white font-bold'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Tất cả ({staffTargetList.length})
+                    </button>
+                    {Object.keys(ROLE_DISPLAY_MAP).map((rKey) => {
+                      const count = staffTargetList.filter((s) => s.role === rKey).length;
+                      if (count === 0) return null;
+                      return (
+                        <button
+                          key={rKey}
+                          type="button"
+                          onClick={() => setModalRoleFilter(rKey)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition whitespace-nowrap cursor-pointer ${
+                            modalRoleFilter === rKey
+                              ? 'bg-indigo-600 text-white font-bold'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          {ROLE_DISPLAY_MAP[rKey]?.shortLabel || rKey} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset(0, 0)}
+                      className="px-2 py-0.5 rounded-md border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[10px] font-bold text-rose-700 cursor-pointer"
+                    >
+                      Xóa tất cả về 0
+                    </button>
+                  </div>
+                </div>
+
+                {/* Staff Target Table (Scrollable) */}
+                <div className="flex-1 overflow-y-auto border border-slate-200 rounded-2xl min-h-[250px]">
+                  {loadingStaffTargets ? (
+                    <div className="py-16 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
+                      <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
+                      <span>Đang tải danh sách nhân viên và chỉ tiêu...</span>
+                    </div>
+                  ) : (
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold sticky top-0 z-10 uppercase tracking-wider text-[11px]">
+                        <tr>
+                          <th className="py-2.5 px-3">Nhân Viên</th>
+                          <th className="py-2.5 px-3">Chi Nhánh</th>
+                          <th className="py-2.5 px-3 w-48">Chỉ Tiêu Doanh Số (VNĐ)</th>
+                          <th className="py-2.5 px-3 w-32">Chỉ Tiêu Bé Mới</th>
+                          <th className="py-2.5 px-3">Ghi Chú</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {staffTargetList
+                          .filter((st) => {
+                            if (modalRoleFilter !== 'all' && st.role !== modalRoleFilter) return false;
+                            if (!staffSearchQuery) return true;
+                            const q = staffSearchQuery.toLowerCase();
+                            return (
+                              st.fullName?.toLowerCase().includes(q) ||
+                              st.phone?.includes(q) ||
+                              st.branchName?.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((st) => {
+                            const meta = ROLE_DISPLAY_MAP[st.role];
+                            return (
+                              <tr key={st.userId} className="hover:bg-indigo-50/20 transition">
+                                <td className="py-2.5 px-3">
+                                  <div className="font-bold text-slate-800 text-xs">{st.fullName}</div>
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                    <span>{st.phone || 'Chưa có SĐT'}</span>
+                                    <span className={`px-1.5 py-0.2 rounded font-semibold border ${meta ? meta.badgeClass : 'bg-slate-100 text-slate-600'}`}>
+                                      {meta ? meta.shortLabel : st.role}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3 text-slate-600 font-medium">
+                                  {st.branchName || 'Trung tâm'}
+                                </td>
+
+                                <td className="py-2.5 px-3">
+                                  <div>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="500000"
+                                      value={st.targetRevenue || 0}
+                                      onChange={(e) =>
+                                        handleUpdateStaffTarget(st.userId, 'targetRevenue', Number(e.target.value))
+                                      }
+                                      className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
+                                    />
+                                    <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                                      {Number(st.targetRevenue || 0).toLocaleString('vi-VN')} đ
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3">
+                                  <div>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={st.targetNewStudents || 0}
+                                      onChange={(e) =>
+                                        handleUpdateStaffTarget(st.userId, 'targetNewStudents', Number(e.target.value))
+                                      }
+                                      className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-bold text-amber-700 outline-none focus:border-indigo-500"
+                                    />
+                                    <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                                      {st.targetNewStudents || 0} bé
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3">
+                                  <input
+                                    type="text"
+                                    value={st.note || ''}
+                                    onChange={(e) => handleUpdateStaffTarget(st.userId, 'note', e.target.value)}
+                                    placeholder="Ghi chú thêm..."
+                                    className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs text-slate-700 outline-none focus:border-indigo-500"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+
+                        {staffTargetList.length === 0 && !loadingStaffTargets && (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-slate-400 italic">
+                              Không tìm thấy nhân viên nào đang hoạt động thuộc chi nhánh này.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Real-time Center Total Box (Tổng Hợp Tự Động) */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-blue-50/70 to-purple-50/80 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 shadow-xs">
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-blue-50/70 to-purple-50/80 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0 shadow-sm">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="text-xs font-bold text-indigo-950 uppercase tracking-tight">
-                    Tổng Hợp Chỉ Tiêu Toàn Cơ Sở (Tháng {staffTargetMonth}/{staffTargetYear})
+                    Tổng Chỉ Tiêu Toàn Cơ Sở (Tháng {staffTargetMonth}/{staffTargetYear})
                   </div>
                   <div className="text-[11px] text-indigo-700">
-                    Cộng dồn từ <strong>{staffTargetList.length}</strong> nhân sự đang hoạt động
+                    Cộng dồn tự động từ <strong>{staffTargetList.length}</strong> nhân sự
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 divide-x divide-indigo-200/80">
                 <div className="text-right">
-                  <span className="text-[11px] text-slate-500 block">Tổng Doanh Số:</span>
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Tổng Doanh Số:</span>
                   <span className="text-base font-black text-indigo-700">
                     {staffTargetList
                       .reduce((sum, item) => sum + (Number(item.targetRevenue) || 0), 0)
@@ -1609,7 +2170,7 @@ export const DashboardScreen: React.FC = () => {
                   </span>
                 </div>
                 <div className="pl-4 text-right">
-                  <span className="text-[11px] text-slate-500 block">Tổng Bé Mới:</span>
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Tổng Bé Mới:</span>
                   <span className="text-base font-black text-amber-600">
                     {staffTargetList.reduce((sum, item) => sum + (Number(item.targetNewStudents) || 0), 0)} bé
                   </span>
@@ -1617,166 +2178,28 @@ export const DashboardScreen: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Presets Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs shrink-0">
-              <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-                ⚡ Gán nhanh định mức mẫu:
+            {/* Modal Actions */}
+            <form onSubmit={handleSaveStaffTargets} className="flex items-center justify-between pt-2 border-t border-slate-100 shrink-0">
+              <span className="text-xs text-slate-500">
+                Đã cấu hình cho <strong>{staffTargetList.length}</strong> nhân sự
               </span>
-              <div className="flex items-center gap-1.5 flex-wrap">
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleApplyPreset(30000000, 10, 'TEACHER')}
-                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-medium text-slate-700 cursor-pointer shadow-2xs"
+                  onClick={() => setShowStaffTargetModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
-                  Giáo viên: 30Tr / 10 bé
+                  Đóng
                 </button>
                 <button
-                  type="button"
-                  onClick={() => handleApplyPreset(50000000, 15, 'TEACHER')}
-                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-medium text-slate-700 cursor-pointer shadow-2xs"
+                  type="submit"
+                  disabled={savingStaffTargets || loadingStaffTargets}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer transition disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Giáo viên: 50Tr / 15 bé
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{savingStaffTargets ? 'Đang Lưu...' : 'Lưu Tất Cả Chỉ Tiêu'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleApplyPreset(0, 0)}
-                  className="px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[11px] font-medium text-rose-700 cursor-pointer"
-                >
-                  Xóa về 0
-                </button>
-              </div>
-            </div>
-
-            {/* Staff Target Table (Scrollable) */}
-            <form onSubmit={handleSaveStaffTargets} className="flex flex-col flex-1 min-h-0 space-y-4">
-              <div className="flex-1 overflow-y-auto border border-slate-200 rounded-2xl">
-                {loadingStaffTargets ? (
-                  <div className="py-16 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
-                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
-                    <span>Đang tải danh sách nhân viên và chỉ tiêu...</span>
-                  </div>
-                ) : (
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold sticky top-0 z-10 uppercase tracking-wider text-[11px]">
-                      <tr>
-                        <th className="py-2.5 px-3">Nhân Viên</th>
-                        <th className="py-2.5 px-3">Chi Nhánh</th>
-                        <th className="py-2.5 px-3 w-48">Chỉ Tiêu Doanh Số (VNĐ)</th>
-                        <th className="py-2.5 px-3 w-32">Chỉ Tiêu Bé Mới</th>
-                        <th className="py-2.5 px-3">Ghi Chú</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {staffTargetList
-                        .filter((st) => {
-                          if (!staffSearchQuery) return true;
-                          const q = staffSearchQuery.toLowerCase();
-                          return (
-                            st.fullName?.toLowerCase().includes(q) ||
-                            st.phone?.includes(q) ||
-                            st.branchName?.toLowerCase().includes(q)
-                          );
-                        })
-                        .map((st) => {
-                          return (
-                            <tr key={st.userId} className="hover:bg-indigo-50/20 transition">
-                              <td className="py-2.5 px-3">
-                                <div className="font-bold text-slate-800 text-xs">{st.fullName}</div>
-                                <div className="text-[10px] text-slate-400">
-                                  {st.phone || 'Chưa có SĐT'} •{' '}
-                                  <span className="font-semibold text-indigo-600">
-                                    {st.role === 'TEACHER' ? 'Giáo viên' : st.role === 'BRANCH_MANAGER' ? 'Quản lý' : st.role}
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="py-2.5 px-3 text-slate-600 font-medium">
-                                {st.branchName || 'Trung tâm'}
-                              </td>
-
-                              <td className="py-2.5 px-3">
-                                <div>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="500000"
-                                    value={st.targetRevenue || 0}
-                                    onChange={(e) =>
-                                      handleUpdateStaffTarget(st.userId, 'targetRevenue', Number(e.target.value))
-                                    }
-                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
-                                  />
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    {Number(st.targetRevenue || 0).toLocaleString('vi-VN')} đ
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="py-2.5 px-3">
-                                <div>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={st.targetNewStudents || 0}
-                                    onChange={(e) =>
-                                      handleUpdateStaffTarget(st.userId, 'targetNewStudents', Number(e.target.value))
-                                    }
-                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-bold text-amber-700 outline-none focus:border-indigo-500"
-                                  />
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    {st.targetNewStudents || 0} bé
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="py-2.5 px-3">
-                                <input
-                                  type="text"
-                                  value={st.note || ''}
-                                  onChange={(e) => handleUpdateStaffTarget(st.userId, 'note', e.target.value)}
-                                  placeholder="Ghi chú thêm..."
-                                  className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs text-slate-700 outline-none focus:border-indigo-500"
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-
-                      {staffTargetList.length === 0 && !loadingStaffTargets && (
-                        <tr>
-                          <td colSpan={5} className="py-8 text-center text-slate-400 italic">
-                            Không tìm thấy nhân viên nào đang hoạt động thuộc chi nhánh này.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {/* Modal Footer */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 shrink-0">
-                <span className="text-xs text-slate-500">
-                  Đã cấu hình cho <strong>{staffTargetList.length}</strong> nhân sự
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowStaffTargetModal(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingStaffTargets || loadingStaffTargets}
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer transition disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{savingStaffTargets ? 'Đang Lưu...' : 'Lưu Tất Cả Chỉ Tiêu'}</span>
-                  </button>
-                </div>
               </div>
             </form>
           </div>
