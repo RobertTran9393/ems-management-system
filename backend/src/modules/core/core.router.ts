@@ -101,6 +101,7 @@ coreRouter.post('/configs/seed-defaults', async (req: Request, res: Response) =>
 });
 
 const DEFAULT_MODULE_NAMES: Record<string, string> = {
+  DASHBOARD: 'Dashboard Thống Kê',
   POS: 'Thu Ngân POS',
   RECEIPTS: 'Duyệt Chứng Từ',
   ACADEMIC: 'Giáo Vụ',
@@ -111,11 +112,11 @@ const DEFAULT_MODULE_NAMES: Record<string, string> = {
 };
 
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  ADMIN: ['ADMIN', 'POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM'],
-  ACCOUNTANT: ['POS', 'RECEIPTS', 'PAYROLL'],
-  ACADEMIC_AFFAIRS: ['ACADEMIC', 'CRM'],
-  SALE: ['CRM', 'POS'],
-  TEACHER: ['MOBILE'],
+  ADMIN: ['DASHBOARD', 'ADMIN', 'POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM'],
+  ACCOUNTANT: ['DASHBOARD', 'POS', 'RECEIPTS', 'PAYROLL'],
+  ACADEMIC_AFFAIRS: ['DASHBOARD', 'ACADEMIC', 'CRM'],
+  SALE: ['DASHBOARD', 'CRM', 'POS'],
+  TEACHER: ['DASHBOARD', 'MOBILE'],
 };
 
 // 3.2 Get System Branding & Appearance (including Module Names)

@@ -11,6 +11,7 @@ import { academicRouter } from './modules/academic/academic.router';
 import { attendanceRouter } from './modules/attendance/attendance.router';
 import { payrollRouter } from './modules/payroll/payroll.router';
 import { pluginRouter } from './modules/plugin/plugin.router';
+import { dashboardRouter } from './modules/dashboard/dashboard.router';
 import { eventBus, DomainEvent } from './events/event-bus';
 
 import { authenticateToken } from './middlewares/auth.middleware';
@@ -114,6 +115,7 @@ app.use('/api/academic', academicRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/plugin', pluginRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 const HOST = '0.0.0.0';
 

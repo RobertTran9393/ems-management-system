@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DashboardScreen } from './components/DashboardScreen';
 import { POSScreen } from './components/POSScreen';
 import { ReceiptVerificationScreen } from './components/ReceiptVerificationScreen';
 import { AcademicScreen } from './components/AcademicScreen';
@@ -7,16 +8,23 @@ import { TeacherMobileScreen } from './components/TeacherMobileScreen';
 import { CrmScreen } from './components/CrmScreen';
 import { AdminScreen } from './components/AdminScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut } from 'lucide-react';
+import { BarChart3, ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut } from 'lucide-react';
 import { useBranding } from './context/BrandingContext';
 
 export function App() {
   const { branding, hasModuleAccess } = useBranding();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('POS');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('DASHBOARD');
 
   const navTabs = [
+    {
+      key: 'DASHBOARD' as const,
+      label: branding.moduleNames.DASHBOARD || 'Dashboard',
+      icon: BarChart3,
+      colorClass: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold',
+      inactiveColorClass: 'text-indigo-300 hover:text-white hover:bg-slate-800/70',
+    },
     {
       key: 'ADMIN' as const,
       label: branding.moduleNames.ADMIN || 'Quản Trị',
@@ -238,6 +246,7 @@ export function App() {
 
       {/* Main Content View */}
       <main className="flex-1">
+        {activeTab === 'DASHBOARD' && <DashboardScreen />}
         {activeTab === 'ADMIN' && <AdminScreen />}
         {activeTab === 'POS' && <POSScreen />}
         {activeTab === 'RECEIPTS' && <ReceiptVerificationScreen />}

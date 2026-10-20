@@ -79,6 +79,7 @@ const SYSTEM_ROLES_INFO: Record<string, { label: string; desc: string; badgeColo
 };
 
 const MODULE_DESCRIPTIONS: Record<string, string> = {
+  DASHBOARD: 'Thống kê trực quan doanh thu, học viên đang học, hoàn tất & mới theo ngày/tuần/tháng/cơ sở',
   POS: 'Thu ngân, bán khóa học/học phẩm, in phiếu thu & áp voucher',
   RECEIPTS: 'Quản lý biên lai, lịch sử giao dịch và doanh số các cơ sở',
   ACADEMIC: 'Quản lý lớp học, lịch học, điểm danh 24 buổi & theo dõi học sinh',
@@ -2711,7 +2712,7 @@ export function AdminScreen() {
                     <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold">
                       <th className="p-3.5 min-w-[340px] whitespace-nowrap">Vai Trò Hệ Thống</th>
                       <th className="p-3.5 min-w-[260px]">Mô Tả & Trách Nhiệm</th>
-                      {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => (
+                      {ALL_MODULE_KEYS.map((modKey) => (
                         <th key={modKey} className="p-3.5 text-center min-w-[120px]">
                           <div className="font-bold text-slate-900">
                             {branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey]}
@@ -2742,7 +2743,7 @@ export function AdminScreen() {
                           <td className="p-3.5 text-slate-500 text-[11px] leading-relaxed">
                             {info.desc}
                           </td>
-                          {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => {
+                          {ALL_MODULE_KEYS.map((modKey) => {
                             const isChecked = activeModules.includes(modKey);
 
                             if (isAdmin) {
@@ -4161,7 +4162,7 @@ export function AdminScreen() {
                   <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-bold">
                     <th className="p-3.5 min-w-[340px] whitespace-nowrap">Vai Trò Hệ Thống</th>
                     <th className="p-3.5 min-w-[260px]">Mô Tả & Trách Nhiệm</th>
-                    {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => (
+                    {ALL_MODULE_KEYS.map((modKey) => (
                       <th key={modKey} className="p-3.5 text-center min-w-[120px]">
                         <div className="font-bold text-slate-900">
                           {branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey]}
@@ -4192,7 +4193,7 @@ export function AdminScreen() {
                         <td className="p-3.5 text-slate-500 text-[11px] leading-relaxed">
                           {info.desc}
                         </td>
-                        {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => {
+                        {ALL_MODULE_KEYS.map((modKey) => {
                           const isChecked = activeModules.includes(modKey);
 
                           if (isAdmin) {
@@ -4472,11 +4473,11 @@ export function AdminScreen() {
               {/* Module Checkbox Cards */}
               <div className="space-y-2.5">
                 <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Chọn Phân Hệ Cho Phép Tài Khoản Này Truy Cập ({selectedUserModules.length}/7):
+                  Chọn Phân Hệ Cho Phép Tài Khoản Này Truy Cập ({selectedUserModules.length}/{ALL_MODULE_KEYS.length}):
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {['POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'].map((modKey) => {
+                  {ALL_MODULE_KEYS.map((modKey) => {
                     const isChecked = selectedUserModules.includes(modKey);
                     const modName = branding.moduleNames?.[modKey] || DEFAULT_MODULE_NAMES[modKey];
                     const modDesc = MODULE_DESCRIPTIONS[modKey];
