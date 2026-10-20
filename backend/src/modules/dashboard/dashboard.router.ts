@@ -16,7 +16,10 @@ interface DateRange {
  * Helper to compute date bounds and chart intervals
  */
 function getDateRange(period: string, refDateStr?: string, customStart?: string, customEnd?: string): DateRange {
-  const ref = refDateStr ? new Date(refDateStr) : new Date();
+  let ref = refDateStr ? new Date(refDateStr) : new Date();
+  if (isNaN(ref.getTime())) {
+    ref = new Date();
+  }
   const y = ref.getFullYear();
   const m = ref.getMonth(); // 0-11
   const d = ref.getDate();
@@ -91,16 +94,22 @@ function getDateRange(period: string, refDateStr?: string, customStart?: string,
       });
     }
   } else if (period === 'custom' && customStart && customEnd) {
-    start = new Date(customStart);
+    let cStart = new Date(customStart);
+    let cEnd = new Date(customEnd);
+    if (isNaN(cStart.getTime()) || isNaN(cEnd.getTime()) || cStart > cEnd) {
+      cStart = new Date(y, m, 1, 0, 0, 0, 0);
+      cEnd = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    }
+    start = cStart;
     start.setHours(0, 0, 0, 0);
-    end = new Date(customEnd);
+    end = cEnd;
     end.setHours(23, 59, 59, 999);
-    const duration = end.getTime() - start.getTime();
+    const duration = Math.max(1000, end.getTime() - start.getTime());
     prevEnd = new Date(start.getTime() - 1);
     prevStart = new Date(prevEnd.getTime() - duration);
 
     // Split custom range into 4 equal segments
-    const step = Math.floor(duration / 4);
+    const step = Math.max(1, Math.floor(duration / 4));
     for (let i = 0; i < 4; i++) {
       const segStart = new Date(start.getTime() + i * step);
       const segEnd = i === 3 ? end : new Date(start.getTime() + (i + 1) * step - 1);
@@ -651,26 +660,34 @@ dashboardRouter.put('/targets', async (req: Request, res: Response) => {
     const revKey = isTeacherTarget ? 'TARGET_REVENUE_TEACHER_MONTHLY' : 'TARGET_REVENUE_MONTHLY';
     const newKey = isTeacherTarget ? 'TARGET_NEW_STUDENTS_TEACHER_MONTHLY' : 'TARGET_NEW_STUDENTS_MONTHLY';
 
-    if (targetRevenue !== undefined && Number(targetRevenue) >= 0) {
+    if (targetRevenue !== undefined) {
+      const numRev = Number(targetRevenue);
+      if (isNaN(numRev) || numRev < 0) {
+        return res.status(400).json({ success: false, message: 'Chỉ tiêu doanh số phải là số dương hợp lệ' });
+      }
       await prisma.systemConfig.upsert({
         where: { key: revKey },
-        update: { value: String(targetRevenue) },
+        update: { value: String(numRev) },
         create: {
           key: revKey,
-          value: String(targetRevenue),
+          value: String(numRev),
           category: 'PAYROLL',
           description: isTeacherTarget ? 'Chỉ tiêu doanh số tháng cho Giáo viên' : 'Chỉ tiêu doanh số tháng toàn trung tâm',
         },
       });
     }
 
-    if (targetNewStudents !== undefined && Number(targetNewStudents) >= 0) {
+    if (targetNewStudents !== undefined) {
+      const numNew = Number(targetNewStudents);
+      if (isNaN(numNew) || numNew < 0) {
+        return res.status(400).json({ success: false, message: 'Chỉ tiêu học viên mới phải là số nguyên dương hợp lệ' });
+      }
       await prisma.systemConfig.upsert({
         where: { key: newKey },
-        update: { value: String(targetNewStudents) },
+        update: { value: String(Math.floor(numNew)) },
         create: {
           key: newKey,
-          value: String(targetNewStudents),
+          value: String(Math.floor(numNew)),
           category: 'PAYROLL',
           description: isTeacherTarget ? 'Chỉ tiêu học viên mới tháng cho Giáo viên' : 'Chỉ tiêu học viên mới tháng toàn trung tâm',
         },
