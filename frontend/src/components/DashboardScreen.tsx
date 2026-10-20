@@ -19,6 +19,9 @@ import {
   GraduationCap,
   PieChart,
   BookOpen,
+  Target,
+  Sliders,
+  CheckCheck,
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 
@@ -36,6 +39,12 @@ export const DashboardScreen: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeChartMetric, setActiveChartMetric] = useState<'revenue' | 'newStudents' | 'completedStudents'>('revenue');
   const [recentTab, setRecentTab] = useState<'orders' | 'newStudents' | 'completed'>('orders');
+
+  // Target Settings Modal State
+  const [showTargetModal, setShowTargetModal] = useState<boolean>(false);
+  const [editingTargetRev, setEditingTargetRev] = useState<number>(100000000);
+  const [editingTargetNew, setEditingTargetNew] = useState<number>(30);
+  const [savingTarget, setSavingTarget] = useState<boolean>(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('ems_user');
@@ -109,6 +118,54 @@ export const DashboardScreen: React.FC = () => {
     onTimeLevelUpCount: 0,
     newStudentsCount: 0,
     newStudentsGrowth: 0,
+  };
+
+  const targets = summary.targets || {
+    periodTargetRevenue: 100000000,
+    monthlyTargetRevenue: 100000000,
+    revenueAchievementRate: 0,
+    revenueRemaining: 100000000,
+    periodTargetNewStudents: 30,
+    monthlyTargetNewStudents: 30,
+    newStudentsAchievementRate: 0,
+    newStudentsRemaining: 30,
+  };
+
+  const handleOpenTargetModal = () => {
+    setEditingTargetRev(targets.monthlyTargetRevenue || 100000000);
+    setEditingTargetNew(targets.monthlyTargetNewStudents || 30);
+    setShowTargetModal(true);
+  };
+
+  const handleSaveTargets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingTarget(true);
+      const token = localStorage.getItem('ems_token');
+      const res = await fetch(`${API_BASE_URL}/api/dashboard/targets`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          targetRevenue: editingTargetRev,
+          targetNewStudents: editingTargetNew,
+          isTeacherTarget: isTeacher && teacherScope === 'mine',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowTargetModal(false);
+        fetchMetrics();
+      } else {
+        alert(data.message || 'Lỗi khi lưu chỉ tiêu');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingTarget(false);
+    }
   };
 
   const trendData: any[] = metrics?.trendData || [];
@@ -296,6 +353,181 @@ export const DashboardScreen: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2.1 THỰC HIỆN CHỈ TIÊU & TỶ LỆ ĐÃ ĐẠT (TARGETS & ACHIEVEMENT PROGRESS) */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-indigo-600/10 text-indigo-700 flex items-center justify-center">
+              <Target className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+              Theo Dõi Chỉ Tiêu & Tỷ Lệ Đã Đạt Kỳ Này
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenTargetModal}
+            className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer bg-white shadow-2xs"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Cài Đặt Chỉ Tiêu</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Progress Card 1: Chỉ tiêu doanh số */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-800 uppercase tracking-tight">Chỉ Tiêu Doanh Số</div>
+                  <div className="text-[11px] text-slate-400">
+                    Mục tiêu kỳ: <strong className="text-slate-700">{Number(targets.periodTargetRevenue).toLocaleString('vi-VN')} đ</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tỷ lệ đã đạt Badge */}
+              <div className="text-right">
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-black border ${
+                    targets.revenueAchievementRate >= 100
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : targets.revenueAchievementRate >= 70
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                      : 'bg-amber-50 text-amber-700 border-amber-300'
+                  }`}
+                >
+                  {targets.revenueAchievementRate >= 100 && <CheckCheck className="w-3.5 h-3.5 mr-1" />}
+                  Đã đạt {targets.revenueAchievementRate}%
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic Progress Bar */}
+            <div className="space-y-1">
+              <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/60 flex items-center">
+                <div
+                  style={{ width: `${Math.min(100, targets.revenueAchievementRate)}%` }}
+                  className={`h-full rounded-full transition-all duration-700 shadow-xs ${
+                    targets.revenueAchievementRate >= 100
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                      : targets.revenueAchievementRate >= 70
+                      ? 'bg-gradient-to-r from-indigo-500 to-blue-600'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* 3 Metrics breakdown footer */}
+            <div className="grid grid-cols-3 pt-2 border-t border-slate-100 text-xs gap-2">
+              <div>
+                <span className="text-slate-400 text-[11px] block">Thực thu:</span>
+                <strong className="text-indigo-600 font-bold">{Number(summary.totalRevenue).toLocaleString('vi-VN')} đ</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[11px] block">Chỉ tiêu:</span>
+                <strong className="text-slate-800 font-bold">{Number(targets.periodTargetRevenue).toLocaleString('vi-VN')} đ</strong>
+              </div>
+              <div className="text-right">
+                <span className="text-slate-400 text-[11px] block">
+                  {targets.revenueRemaining > 0 ? 'Còn thiếu:' : 'Vượt mục tiêu:'}
+                </span>
+                <strong
+                  className={`font-bold ${
+                    targets.revenueRemaining > 0 ? 'text-amber-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {targets.revenueRemaining > 0
+                    ? `${Number(targets.revenueRemaining).toLocaleString('vi-VN')} đ`
+                    : `+${targets.revenueAchievementRate - 100}% 🎉`}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Card 2: Chỉ tiêu bé mới */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-800 uppercase tracking-tight">Chỉ Tiêu Bé Mới</div>
+                  <div className="text-[11px] text-slate-400">
+                    Mục tiêu kỳ: <strong className="text-slate-700">{targets.periodTargetNewStudents} bé</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tỷ lệ đã đạt Badge */}
+              <div className="text-right">
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-black border ${
+                    targets.newStudentsAchievementRate >= 100
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : targets.newStudentsAchievementRate >= 70
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                      : 'bg-amber-50 text-amber-700 border-amber-300'
+                  }`}
+                >
+                  {targets.newStudentsAchievementRate >= 100 && <CheckCheck className="w-3.5 h-3.5 mr-1" />}
+                  Đã đạt {targets.newStudentsAchievementRate}%
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic Progress Bar */}
+            <div className="space-y-1">
+              <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/60 flex items-center">
+                <div
+                  style={{ width: `${Math.min(100, targets.newStudentsAchievementRate)}%` }}
+                  className={`h-full rounded-full transition-all duration-700 shadow-xs ${
+                    targets.newStudentsAchievementRate >= 100
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                      : targets.newStudentsAchievementRate >= 70
+                      ? 'bg-gradient-to-r from-indigo-500 to-blue-600'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* 3 Metrics breakdown footer */}
+            <div className="grid grid-cols-3 pt-2 border-t border-slate-100 text-xs gap-2">
+              <div>
+                <span className="text-slate-400 text-[11px] block">Đã tuyển:</span>
+                <strong className="text-amber-600 font-bold">{summary.newStudentsCount} bé</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[11px] block">Chỉ tiêu:</span>
+                <strong className="text-slate-800 font-bold">{targets.periodTargetNewStudents} bé</strong>
+              </div>
+              <div className="text-right">
+                <span className="text-slate-400 text-[11px] block">
+                  {targets.newStudentsRemaining > 0 ? 'Còn thiếu:' : 'Vượt mục tiêu:'}
+                </span>
+                <strong
+                  className={`font-bold ${
+                    targets.newStudentsRemaining > 0 ? 'text-amber-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {targets.newStudentsRemaining > 0
+                    ? `${targets.newStudentsRemaining} bé`
+                    : `+${targets.newStudentsAchievementRate - 100}% 🎉`}
+                </strong>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -861,6 +1093,94 @@ export const DashboardScreen: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 7. Target Configuration Modal */}
+      {showTargetModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Cài Đặt Chỉ Tiêu Tháng</h3>
+                  <p className="text-[11px] text-slate-500">
+                    {isTeacher && teacherScope === 'mine' ? 'Thiết lập chỉ tiêu cho Giáo viên' : 'Thiết lập chỉ tiêu toàn hệ thống/trung tâm'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTargetModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTargets} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Chỉ Tiêu Doanh Số Tháng (VNĐ):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000000"
+                  value={editingTargetRev}
+                  onChange={(e) => setEditingTargetRev(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:border-indigo-500 outline-none"
+                  placeholder="Ví dụ: 100000000"
+                  required
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  Định dạng: {Number(editingTargetRev).toLocaleString('vi-VN')} đ/tháng
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Chỉ Tiêu Học Viên Mới Tháng (Bé):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingTargetNew}
+                  onChange={(e) => setEditingTargetNew(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:border-indigo-500 outline-none"
+                  placeholder="Ví dụ: 30"
+                  required
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  Định dạng: {editingTargetNew} bé mới/tháng
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 text-[11px] text-indigo-800 leading-relaxed">
+                💡 Hệ thống sẽ tự động quy đổi chỉ tiêu theo Ngày (÷26 ngày), Tuần (÷4 tuần) hoặc Năm (×12) khi bạn chuyển bộ lọc thời gian tương ứng.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowTargetModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingTarget}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer transition disabled:opacity-50"
+                >
+                  {savingTarget ? 'Đang Lưu...' : 'Lưu Chỉ Tiêu'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

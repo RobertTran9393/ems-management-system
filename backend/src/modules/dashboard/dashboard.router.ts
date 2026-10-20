@@ -527,6 +527,59 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
       return Math.round(((curr - prev) / prev) * 100);
     };
 
+    // --- 8. TARGETS (CHỈ TIÊU DOANH SỐ & HỌC VIÊN MỚI) ---
+    const targetConfigs = await prisma.systemConfig.findMany({
+      where: {
+        key: {
+          in: [
+            'TARGET_REVENUE_MONTHLY',
+            'TARGET_NEW_STUDENTS_MONTHLY',
+            'TARGET_REVENUE_TEACHER_MONTHLY',
+            'TARGET_NEW_STUDENTS_TEACHER_MONTHLY',
+          ],
+        },
+      },
+    });
+
+    const getCfgVal = (k: string, defaultVal: number) => {
+      const found = targetConfigs.find((c) => c.key === k);
+      return found ? Number(found.value) || defaultVal : defaultVal;
+    };
+
+    const isTeacherScope = Boolean(effectiveTeacherId);
+    const monthlyTargetRev = isTeacherScope
+      ? getCfgVal('TARGET_REVENUE_TEACHER_MONTHLY', 30000000)
+      : getCfgVal('TARGET_REVENUE_MONTHLY', 100000000);
+
+    const monthlyTargetNew = isTeacherScope
+      ? getCfgVal('TARGET_NEW_STUDENTS_TEACHER_MONTHLY', 10)
+      : getCfgVal('TARGET_NEW_STUDENTS_MONTHLY', 30);
+
+    let periodTargetRevenue = monthlyTargetRev;
+    let periodTargetNewStudents = monthlyTargetNew;
+
+    if (period === 'day') {
+      periodTargetRevenue = Math.round(monthlyTargetRev / 26);
+      periodTargetNewStudents = Math.max(1, Math.round(monthlyTargetNew / 26));
+    } else if (period === 'week') {
+      periodTargetRevenue = Math.round(monthlyTargetRev / 4);
+      periodTargetNewStudents = Math.max(1, Math.round(monthlyTargetNew / 4));
+    } else if (period === 'year') {
+      periodTargetRevenue = monthlyTargetRev * 12;
+      periodTargetNewStudents = monthlyTargetNew * 12;
+    } else if (period === 'custom') {
+      const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      periodTargetRevenue = Math.round((monthlyTargetRev / 30) * days);
+      periodTargetNewStudents = Math.max(1, Math.round((monthlyTargetNew / 30) * days));
+    }
+
+    const revenueAchievementRate = periodTargetRevenue > 0
+      ? Math.round((totalRevenueCurrent / periodTargetRevenue) * 100)
+      : 100;
+    const newStudentsAchievementRate = periodTargetNewStudents > 0
+      ? Math.round((newStudentsCount / periodTargetNewStudents) * 100)
+      : 100;
+
     return res.json({
       success: true,
       data: {
@@ -546,6 +599,18 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
 
           newStudentsCount,
           newStudentsGrowth: calcGrowth(newStudentsCount, newStudentsPrev),
+
+          targets: {
+            periodTargetRevenue,
+            monthlyTargetRevenue: monthlyTargetRev,
+            revenueAchievementRate,
+            revenueRemaining: Math.max(0, periodTargetRevenue - totalRevenueCurrent),
+
+            periodTargetNewStudents,
+            monthlyTargetNewStudents: monthlyTargetNew,
+            newStudentsAchievementRate,
+            newStudentsRemaining: Math.max(0, periodTargetNewStudents - newStudentsCount),
+          },
         },
         meta: {
           period,
@@ -572,6 +637,48 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error fetching dashboard metrics:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PUT /api/dashboard/targets
+ * Quick configuration of monthly revenue & new students target
+ */
+dashboardRouter.put('/targets', async (req: Request, res: Response) => {
+  try {
+    const { targetRevenue, targetNewStudents, isTeacherTarget } = req.body;
+    const revKey = isTeacherTarget ? 'TARGET_REVENUE_TEACHER_MONTHLY' : 'TARGET_REVENUE_MONTHLY';
+    const newKey = isTeacherTarget ? 'TARGET_NEW_STUDENTS_TEACHER_MONTHLY' : 'TARGET_NEW_STUDENTS_MONTHLY';
+
+    if (targetRevenue !== undefined && Number(targetRevenue) >= 0) {
+      await prisma.systemConfig.upsert({
+        where: { key: revKey },
+        update: { value: String(targetRevenue) },
+        create: {
+          key: revKey,
+          value: String(targetRevenue),
+          category: 'PAYROLL',
+          description: isTeacherTarget ? 'Chỉ tiêu doanh số tháng cho Giáo viên' : 'Chỉ tiêu doanh số tháng toàn trung tâm',
+        },
+      });
+    }
+
+    if (targetNewStudents !== undefined && Number(targetNewStudents) >= 0) {
+      await prisma.systemConfig.upsert({
+        where: { key: newKey },
+        update: { value: String(targetNewStudents) },
+        create: {
+          key: newKey,
+          value: String(targetNewStudents),
+          category: 'PAYROLL',
+          description: isTeacherTarget ? 'Chỉ tiêu học viên mới tháng cho Giáo viên' : 'Chỉ tiêu học viên mới tháng toàn trung tâm',
+        },
+      });
+    }
+
+    return res.json({ success: true, message: 'Cập nhật chỉ tiêu kinh doanh & tuyển sinh thành công' });
+  } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });

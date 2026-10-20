@@ -88,7 +88,9 @@ export function App() {
         setToken(savedToken);
         const parsed = JSON.parse(savedUser);
         setCurrentUser(parsed);
-        if (parsed.role === 'ADMIN') {
+        if (hasModuleAccess(parsed, 'DASHBOARD')) {
+          setActiveTab('DASHBOARD');
+        } else if (parsed.role === 'ADMIN') {
           setActiveTab('ADMIN');
         }
       } catch (e) {
@@ -124,7 +126,9 @@ export function App() {
   const handleLoginSuccess = (user: any, authToken: string) => {
     setCurrentUser(user);
     setToken(authToken);
-    if (user.role === 'ADMIN') {
+    if (hasModuleAccess(user, 'DASHBOARD')) {
+      setActiveTab('DASHBOARD');
+    } else if (user.role === 'ADMIN') {
       setActiveTab('ADMIN');
     } else if (user.role === 'TEACHER') {
       setActiveTab('MOBILE');
