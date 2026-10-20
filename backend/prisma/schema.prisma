@@ -142,6 +142,7 @@ model User {
   payrolls              Payroll[]
   adminTimesheets       AdminTimesheet[]
   createdOrders         Order[]           @relation("OrderCreator")
+  targets               StaffTarget[]
 
   @@index([branchId])
   @@index([role, status])
@@ -617,6 +618,23 @@ model AdminTimesheet {
 
   @@index([userId, workDate])
   @@map("admin_timesheets")
+}
+
+model StaffTarget {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month             Int      // 1-12
+  year              Int      // e.g. 2026
+  targetRevenue     Decimal  @default(0) @map("target_revenue") @db.Decimal(14, 2)
+  targetNewStudents Int      @default(0) @map("target_new_students")
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, month, year])
+  @@index([month, year])
+  @@map("staff_targets")
 }
 
 model Payroll {

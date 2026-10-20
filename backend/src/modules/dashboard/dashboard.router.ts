@@ -537,6 +537,50 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
     };
 
     // --- 8. TARGETS (CHỈ TIÊU DOANH SỐ & HỌC VIÊN MỚI) ---
+    const targetMonth = start.getMonth() + 1;
+    const targetYear = start.getFullYear();
+
+    // Query all active staff in branch or all
+    const staffWhere: any = { status: 'ACTIVE' };
+    if (effectiveBranchId) {
+      staffWhere.branchId = effectiveBranchId;
+    }
+    const relevantStaff = await prisma.user.findMany({
+      where: staffWhere,
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        branchId: true,
+        branch: { select: { name: true } },
+      },
+    });
+
+    const relevantStaffIds = relevantStaff.map((s) => s.id);
+
+    // Fetch individual staff targets for this month & year
+    const staffTargets = await prisma.staffTarget.findMany({
+      where: {
+        month: targetMonth,
+        year: targetYear,
+        userId: { in: relevantStaffIds },
+      },
+    });
+
+    // If teacher scope: find this teacher's target
+    let sumStaffTargetRev = 0;
+    let sumStaffTargetNew = 0;
+
+    if (effectiveTeacherId) {
+      const myTarget = staffTargets.find((t) => t.userId === effectiveTeacherId);
+      sumStaffTargetRev = myTarget ? Number(myTarget.targetRevenue) : 0;
+      sumStaffTargetNew = myTarget ? Number(myTarget.targetNewStudents) : 0;
+    } else {
+      // Sum across all relevant staff in this center / all centers
+      sumStaffTargetRev = staffTargets.reduce((sum, t) => sum + Number(t.targetRevenue), 0);
+      sumStaffTargetNew = staffTargets.reduce((sum, t) => sum + Number(t.targetNewStudents), 0);
+    }
+
     const targetConfigs = await prisma.systemConfig.findMany({
       where: {
         key: {
@@ -556,13 +600,14 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
     };
 
     const isTeacherScope = Boolean(effectiveTeacherId);
-    const monthlyTargetRev = isTeacherScope
-      ? getCfgVal('TARGET_REVENUE_TEACHER_MONTHLY', 30000000)
-      : getCfgVal('TARGET_REVENUE_MONTHLY', 100000000);
+    // If staff targets are configured, the center target is the aggregate of all staff targets!
+    const monthlyTargetRev = sumStaffTargetRev > 0
+      ? sumStaffTargetRev
+      : (isTeacherScope ? getCfgVal('TARGET_REVENUE_TEACHER_MONTHLY', 30000000) : getCfgVal('TARGET_REVENUE_MONTHLY', 100000000));
 
-    const monthlyTargetNew = isTeacherScope
-      ? getCfgVal('TARGET_NEW_STUDENTS_TEACHER_MONTHLY', 10)
-      : getCfgVal('TARGET_NEW_STUDENTS_MONTHLY', 30);
+    const monthlyTargetNew = sumStaffTargetNew > 0
+      ? sumStaffTargetNew
+      : (isTeacherScope ? getCfgVal('TARGET_NEW_STUDENTS_TEACHER_MONTHLY', 10) : getCfgVal('TARGET_NEW_STUDENTS_MONTHLY', 30));
 
     let periodTargetRevenue = monthlyTargetRev;
     let periodTargetNewStudents = monthlyTargetNew;
@@ -588,6 +633,50 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
     const newStudentsAchievementRate = periodTargetNewStudents > 0
       ? Math.round((newStudentsCount / periodTargetNewStudents) * 100)
       : 100;
+
+    // Build Staff Leaderboard (Bảng theo dõi tiến độ từng nhân viên)
+    const staffLeaderboard = [];
+    for (const staff of relevantStaff) {
+      const st = staffTargets.find((t) => t.userId === staff.id);
+      const staffTargetRev = st ? Number(st.targetRevenue) : 0;
+      const staffTargetNew = st ? Number(st.targetNewStudents) : 0;
+
+      // Actual revenue for this staff in period
+      const staffOrders = currentOrders.filter(
+        (o) => o.createdById === staff.id
+      );
+      const staffActualRev = staffOrders.reduce((sum, o) => sum + Number(o.paidAmount), 0);
+
+      // Actual new students for this staff in period
+      const staffNewEnr = await prisma.enrollment.count({
+        where: {
+          createdAt: { gte: start, lte: end },
+          OR: [
+            { assignedTeacherId: staff.id },
+            { currentClass: { mainTeacherId: staff.id } },
+          ],
+        },
+      });
+
+      const revRate = staffTargetRev > 0 ? Math.round((staffActualRev / staffTargetRev) * 100) : 0;
+      const newRate = staffTargetNew > 0 ? Math.round((staffNewEnr / staffTargetNew) * 100) : 0;
+
+      staffLeaderboard.push({
+        userId: staff.id,
+        fullName: staff.fullName,
+        role: staff.role,
+        branchName: staff.branch?.name,
+        targetRevenue: staffTargetRev,
+        actualRevenue: staffActualRev,
+        revenueRate: revRate,
+        targetNewStudents: staffTargetNew,
+        actualNewStudents: staffNewEnr,
+        newStudentsRate: newRate,
+        overallRate: Math.round((revRate + newRate) / 2),
+      });
+    }
+
+    staffLeaderboard.sort((a, b) => b.overallRate - a.overallRate);
 
     return res.json({
       success: true,
@@ -619,6 +708,8 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
             monthlyTargetNewStudents: monthlyTargetNew,
             newStudentsAchievementRate,
             newStudentsRemaining: Math.max(0, periodTargetNewStudents - newStudentsCount),
+            isAggregatedFromStaff: sumStaffTargetRev > 0,
+            assignedStaffCount: staffTargets.length,
           },
         },
         meta: {
@@ -631,6 +722,7 @@ dashboardRouter.get('/metrics', async (req: Request, res: Response) => {
         },
         trendData,
         branchBreakdown,
+        staffLeaderboard,
         subjectBreakdown: [
           { name: 'Toán Trí Tuệ (SBR)', count: toanCount, revenue: toanRevenue },
           { name: 'Kỹ Năng Sống', count: kyNangCount, revenue: kyNangRevenue },
@@ -695,6 +787,143 @@ dashboardRouter.put('/targets', async (req: Request, res: Response) => {
     }
 
     return res.json({ success: true, message: 'Cập nhật chỉ tiêu kinh doanh & tuyển sinh thành công' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard/staff-targets
+ * Query monthly targets of staff for a given month/year/branch with center totals
+ */
+dashboardRouter.get('/staff-targets', async (req: Request, res: Response) => {
+  try {
+    const { month = new Date().getMonth() + 1, year = new Date().getFullYear(), branchId } = req.query;
+    const m = Number(month);
+    const y = Number(year);
+
+    const staffWhere: any = { status: 'ACTIVE' };
+    if (branchId && branchId !== 'all') {
+      staffWhere.branchId = String(branchId);
+    }
+
+    const staffList = await prisma.user.findMany({
+      where: staffWhere,
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        phone: true,
+        branchId: true,
+        branch: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: [{ branchId: 'asc' }, { fullName: 'asc' }],
+    });
+
+    const staffIds = staffList.map((s) => s.id);
+    const targets = await prisma.staffTarget.findMany({
+      where: {
+        month: m,
+        year: y,
+        userId: { in: staffIds },
+      },
+    });
+
+    const targetMap = new Map<string, any>();
+    targets.forEach((t) => targetMap.set(t.userId, t));
+
+    let totalTargetRevenue = 0;
+    let totalTargetNewStudents = 0;
+
+    const data = staffList.map((s) => {
+      const t = targetMap.get(s.id);
+      const rev = t ? Number(t.targetRevenue) : 0;
+      const newSt = t ? Number(t.targetNewStudents) : 0;
+      totalTargetRevenue += rev;
+      totalTargetNewStudents += newSt;
+
+      return {
+        userId: s.id,
+        fullName: s.fullName,
+        role: s.role,
+        phone: s.phone,
+        branchName: s.branch?.name,
+        branchCode: s.branch?.code,
+        targetRevenue: rev,
+        targetNewStudents: newSt,
+        note: t?.note || '',
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        month: m,
+        year: y,
+        totalTargetRevenue,
+        totalTargetNewStudents,
+        staffCount: staffList.length,
+        staffTargets: data,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/dashboard/staff-targets/batch
+ * Batch set or update monthly targets for multiple employees
+ */
+dashboardRouter.post('/staff-targets/batch', async (req: Request, res: Response) => {
+  try {
+    const { month, year, targets } = req.body;
+    const m = Number(month);
+    const y = Number(year);
+
+    if (!m || m < 1 || m > 12 || !y || y < 2000) {
+      return res.status(400).json({ success: false, message: 'Tháng hoặc năm không hợp lệ' });
+    }
+
+    if (!Array.isArray(targets)) {
+      return res.status(400).json({ success: false, message: 'Danh sách chỉ tiêu không hợp lệ' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const t of targets) {
+        if (!t.userId) continue;
+        const rev = Number(t.targetRevenue) || 0;
+        const newSt = Number(t.targetNewStudents) || 0;
+
+        await tx.staffTarget.upsert({
+          where: {
+            userId_month_year: {
+              userId: t.userId,
+              month: m,
+              year: y,
+            },
+          },
+          update: {
+            targetRevenue: rev,
+            targetNewStudents: Math.floor(newSt),
+            note: t.note || null,
+          },
+          create: {
+            userId: t.userId,
+            month: m,
+            year: y,
+            targetRevenue: rev,
+            targetNewStudents: Math.floor(newSt),
+            note: t.note || null,
+          },
+        });
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã lưu chỉ tiêu cho ${targets.length} nhân sự tháng ${m}/${y} thành công!`,
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
