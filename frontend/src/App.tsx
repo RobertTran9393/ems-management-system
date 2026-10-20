@@ -2,20 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { DashboardScreen } from './components/DashboardScreen';
 import { POSScreen } from './components/POSScreen';
 import { ReceiptVerificationScreen } from './components/ReceiptVerificationScreen';
+import { CashBookScreen } from './components/CashBookScreen';
 import { AcademicScreen } from './components/AcademicScreen';
 import { PayrollScreen } from './components/PayrollScreen';
 import { TeacherMobileScreen } from './components/TeacherMobileScreen';
 import { CrmScreen } from './components/CrmScreen';
 import { AdminScreen } from './components/AdminScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { BarChart3, ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut } from 'lucide-react';
+import { BarChart3, ShoppingCart, FileCheck, GraduationCap, DollarSign, Smartphone, Users, ShieldCheck, LogOut, Wallet } from 'lucide-react';
 import { useBranding } from './context/BrandingContext';
 
 export function App() {
   const { branding, hasModuleAccess } = useBranding();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'ADMIN' | 'POS' | 'RECEIPTS' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'ADMIN' | 'POS' | 'RECEIPTS' | 'CASHBOOK' | 'ACADEMIC' | 'PAYROLL' | 'MOBILE' | 'CRM'>('DASHBOARD');
 
   const navTabs = [
     {
@@ -44,6 +45,13 @@ export function App() {
       label: branding.moduleNames.RECEIPTS || 'Duyệt Chứng Từ',
       icon: FileCheck,
       colorClass: 'bg-emerald-600 text-white font-semibold',
+      inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
+    },
+    {
+      key: 'CASHBOOK' as const,
+      label: branding.moduleNames.CASHBOOK || 'Sổ Quỹ Thu Chi',
+      icon: Wallet,
+      colorClass: 'bg-teal-600 text-white font-semibold',
       inactiveColorClass: 'text-slate-300 hover:text-white hover:bg-slate-800/70',
     },
     {
@@ -254,6 +262,7 @@ export function App() {
         {activeTab === 'ADMIN' && <AdminScreen />}
         {activeTab === 'POS' && <POSScreen />}
         {activeTab === 'RECEIPTS' && <ReceiptVerificationScreen />}
+        {activeTab === 'CASHBOOK' && <CashBookScreen />}
         {activeTab === 'ACADEMIC' && <AcademicScreen />}
         {activeTab === 'PAYROLL' && <PayrollScreen />}
         {activeTab === 'MOBILE' && <TeacherMobileScreen />}

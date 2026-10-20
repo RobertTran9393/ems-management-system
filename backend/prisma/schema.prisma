@@ -92,6 +92,26 @@ enum PayrollStatus {
   PAID
 }
 
+enum FundTransactionType {
+  RECEIPT // Phiếu Thu (Tiền vào quỹ)
+  PAYMENT // Phiếu Chi (Tiền ra khỏi quỹ)
+}
+
+enum FundCategory {
+  TAM_UNG_LUONG         // Tạm ứng lương nhân viên
+  CHI_LUONG             // Chi trả lương chính thức
+  THUE_MAT_BANG         // Thuê mặt bằng / cơ sở
+  DIEN_NUOC_NET         // Điện, nước, internet, rác
+  VAN_PHONG_PHAM        // Sách vở, giáo trình, VPP, công cụ
+  MARKETING_QUANG_CAO   // Quảng cáo Facebook/Google, tờ rơi, biển bảng
+  SUA_CHUA_BAO_TRI      // Bảo trì máy tính, điều hòa, CSVC
+  HOAT_DONG_SU_KIEN     // Khai giảng, dã ngoại, thi đấu
+  THU_THANH_LY          // Thu thanh lý đồ dùng / tài sản
+  THU_HOAN_UNG          // Thu hoàn ứng
+  THU_KHAC              // Thu khác
+  CHI_KHAC              // Chi khác
+}
+
 // ==========================================
 // 1. MOD-CORE: LÕI HỆ THỐNG & NGƯỜI DÙNG
 // ==========================================
@@ -113,6 +133,7 @@ model Branch {
   classes          Class[]
   stocks           BranchStock[]
   orders           Order[]
+  fundTransactions FundTransaction[]
 
   @@map("branches")
 }
@@ -143,6 +164,8 @@ model User {
   adminTimesheets       AdminTimesheet[]
   createdOrders         Order[]           @relation("OrderCreator")
   targets               StaffTarget[]
+  fundTransactions      FundTransaction[] @relation("UserFundTransactions")
+  createdFunds          FundTransaction[] @relation("FundCreator")
 
   @@index([branchId])
   @@index([role, status])
@@ -658,9 +681,13 @@ model Payroll {
   totalDeductions           Decimal       @default(0) @map("total_deductions") @db.Decimal(12, 2)
   netSalary                 Decimal       @default(0) @map("net_salary") @db.Decimal(12, 2)
   status                    PayrollStatus @default(DRAFT)
+  disbursedAt               DateTime?     @map("disbursed_at")
+  disbursedMethod           PaymentMethod? @map("disbursed_method")
+  disbursedBy               String?       @map("disbursed_by")
   createdAt                 DateTime      @default(now()) @map("created_at")
 
   items                     PayrollItem[]
+  fundTransactions          FundTransaction[]
 
   @@unique([userId, month, year])
   @@index([month, year, status])
@@ -681,6 +708,48 @@ model PayrollItem {
 
   @@index([payrollId])
   @@map("payroll_items")
+}
+
+model FundTransaction {
+  id              String              @id @default(uuid())
+  code            String              @unique // PT-... hoặc PC-...
+  type            FundTransactionType
+  category        FundCategory
+  amount          Decimal             @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod       @default(CASH) // CASH hoặc BANK_TRANSFER
+  
+  branchId        String              @map("branch_id")
+  branch          Branch              @relation(fields: [branchId], references: [id])
+
+  recipientName   String              @map("recipient_name")
+  recipientPhone  String?             @map("recipient_phone")
+
+  userId          String?             @map("user_id")
+  user            User?               @relation("UserFundTransactions", fields: [userId], references: [id])
+
+  payrollId       String?             @map("payroll_id")
+  payroll         Payroll?            @relation(fields: [payrollId], references: [id])
+
+  targetMonth     Int?                @map("target_month")
+  targetYear      Int?                @map("target_year")
+
+  transactionDate DateTime            @default(now()) @map("transaction_date")
+  bankAccountInfo String?             @map("bank_account_info")
+  referenceRef    String?             @map("reference_ref")
+  proofImageUrl   String?             @map("proof_image_url")
+  description     String
+  
+  createdById     String?             @map("created_by_id")
+  creator         User?               @relation("FundCreator", fields: [createdById], references: [id])
+  approvedBy      String?             @map("approved_by")
+
+  status          String              @default("COMPLETED")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([branchId, type, transactionDate])
+  @@index([category, targetMonth, targetYear])
+  @@index([userId])
+  @@map("fund_transactions")
 }
 
 // ==========================================

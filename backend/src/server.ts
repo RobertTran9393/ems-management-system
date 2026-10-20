@@ -10,6 +10,7 @@ import { posRouter } from './modules/pos/pos.router';
 import { academicRouter } from './modules/academic/academic.router';
 import { attendanceRouter } from './modules/attendance/attendance.router';
 import { payrollRouter } from './modules/payroll/payroll.router';
+import { fundRouter } from './modules/fund/fund.router';
 import { pluginRouter } from './modules/plugin/plugin.router';
 import { dashboardRouter } from './modules/dashboard/dashboard.router';
 import { eventBus, DomainEvent } from './events/event-bus';
@@ -114,6 +115,7 @@ app.use('/api/pos', posRouter);
 app.use('/api/academic', academicRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/payroll', payrollRouter);
+app.use('/api/fund', fundRouter);
 app.use('/api/plugin', pluginRouter);
 app.use('/api/dashboard', dashboardRouter);
 

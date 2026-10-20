@@ -1,6 +1,21 @@
 import { API_BASE_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Calculator, Send, CheckCircle2, PlusCircle, AlertCircle, TrendingUp, Clock, ShieldCheck } from 'lucide-react';
+import {
+  DollarSign,
+  Calculator,
+  Send,
+  CheckCircle2,
+  PlusCircle,
+  AlertCircle,
+  TrendingUp,
+  Clock,
+  ShieldCheck,
+  Banknote,
+  CreditCard,
+  Printer,
+  Sparkles,
+} from 'lucide-react';
+import { PrintableFundVoucherModal, type FundVoucherData } from './PrintableFundVoucherModal';
 
 export const PayrollScreen: React.FC = () => {
   const [payrolls, setPayrolls] = useState<any[]>([]);
@@ -14,6 +29,17 @@ export const PayrollScreen: React.FC = () => {
   const [allowanceTitle, setAllowanceTitle] = useState('');
   const [allowanceAmount, setAllowanceAmount] = useState<number>(200000);
   const [isDeduction, setIsDeduction] = useState(false);
+
+  // Disburse Modal State
+  const [showDisburseModal, setShowDisburseModal] = useState<boolean>(false);
+  const [disburseMethod, setDisburseMethod] = useState<'CASH' | 'BANK_TRANSFER'>('BANK_TRANSFER');
+  const [disburseBankAccount, setDisburseBankAccount] = useState<string>('');
+  const [disburseCashierName, setDisburseCashierName] = useState<string>('Kế toán trưởng');
+  const [disburseNote, setDisburseNote] = useState<string>('');
+  const [disbursing, setDisbursing] = useState<boolean>(false);
+
+  // Printable Modal State
+  const [activePrintVoucher, setActivePrintVoucher] = useState<FundVoucherData | null>(null);
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -101,6 +127,114 @@ export const PayrollScreen: React.FC = () => {
       }
     } catch (e: any) {
       console.error(e);
+    }
+  };
+
+  const handleOpenDisburseModal = (p: any) => {
+    setSelectedPayrollId(p.id);
+    setSelectedPayroll(p);
+    setDisburseMethod('BANK_TRANSFER');
+    setDisburseBankAccount('');
+    setDisburseCashierName('Kế toán trưởng');
+    setDisburseNote(`Chi trả lương tháng ${month}/${year} cho ${p.user?.fullName}`);
+    setShowDisburseModal(true);
+  };
+
+  const handleConfirmDisburse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPayrollId) return;
+    try {
+      setDisbursing(true);
+      const token = localStorage.getItem('ems_token');
+      const res = await fetch(`${API_BASE_URL}/api/payroll/${selectedPayrollId}/disburse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          paymentMethod: disburseMethod,
+          bankAccountInfo: disburseMethod === 'BANK_TRANSFER' ? disburseBankAccount : undefined,
+          cashierName: disburseCashierName,
+          note: disburseNote,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowDisburseModal(false);
+        setMessage({ type: 'success', text: data.message });
+        fetchPayrolls();
+
+        // Prompt to print voucher immediately
+        if (data.data?.voucher) {
+          const v = data.data.voucher;
+          setActivePrintVoucher({
+            id: v.id,
+            code: v.code,
+            type: v.type,
+            category: v.category,
+            amount: Number(v.amount),
+            paymentMethod: v.paymentMethod,
+            recipientName: v.recipientName,
+            recipientPhone: v.recipientPhone,
+            branchName: selectedPayroll?.user?.branch?.name,
+            transactionDate: v.transactionDate,
+            bankAccountInfo: v.bankAccountInfo,
+            referenceRef: v.referenceRef,
+            description: v.description,
+            approvedBy: v.approvedBy,
+            targetMonth: v.targetMonth,
+            targetYear: v.targetYear,
+          });
+        }
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message });
+    } finally {
+      setDisbursing(false);
+    }
+  };
+
+  const handlePrintPaidVoucher = (p: any) => {
+    const v = p.fundTransactions?.[0];
+    if (v) {
+      setActivePrintVoucher({
+        id: v.id,
+        code: v.code,
+        type: v.type,
+        category: v.category,
+        amount: Number(v.amount),
+        paymentMethod: v.paymentMethod,
+        recipientName: p.user?.fullName,
+        recipientPhone: p.user?.phone,
+        branchName: p.user?.branch?.name,
+        transactionDate: v.transactionDate,
+        bankAccountInfo: v.bankAccountInfo,
+        referenceRef: v.referenceRef,
+        description: `Chi trả lương tháng ${p.month}/${p.year} cho ${p.user?.fullName}`,
+        approvedBy: v.approvedBy,
+        targetMonth: p.month,
+        targetYear: p.year,
+      });
+    } else {
+      setActivePrintVoucher({
+        id: p.id,
+        code: `PC-LUONG-${p.month}${p.year}-${p.id.slice(-4)}`,
+        type: 'PAYMENT',
+        category: 'CHI_LUONG',
+        amount: Number(p.netSalary),
+        paymentMethod: p.disbursedMethod || 'BANK_TRANSFER',
+        recipientName: p.user?.fullName,
+        recipientPhone: p.user?.phone,
+        branchName: p.user?.branch?.name,
+        transactionDate: p.disbursedAt || new Date(),
+        description: `Chi trả lương tháng ${p.month}/${p.year} cho ${p.user?.fullName}`,
+        approvedBy: p.disbursedBy || 'Kế toán trưởng',
+        targetMonth: p.month,
+        targetYear: p.year,
+      });
     }
   };
 
@@ -246,26 +380,59 @@ export const PayrollScreen: React.FC = () => {
                       {Number(p.netSalary).toLocaleString('vi-VN')} đ
                     </td>
                     <td className="p-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded font-bold ${
-                          p.status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {p.status}
-                      </span>
+                      <div className="space-y-1">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-bold border ${
+                            p.status === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : p.status === 'APPROVED'
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {p.status === 'PAID' ? 'ĐÃ CHI LƯƠNG' : p.status === 'APPROVED' ? 'ĐÃ DUYỆT' : 'BẢN NHÁP'}
+                        </span>
+                        {p.items?.some((it: any) => it.isDeduction && it.title?.includes('Tạm ứng')) && (
+                          <div className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 w-fit">
+                            Có trừ tạm ứng
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectPayroll(p);
-                        }}
-                        className="text-xs text-blue-600 underline font-medium hover:text-blue-800"
-                      >
-                        Xem phiếu lương
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectPayroll(p);
+                          }}
+                          className="text-xs text-blue-600 underline font-medium hover:text-blue-800"
+                        >
+                          Xem chi tiết
+                        </button>
+                        {p.status !== 'PAID' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDisburseModal(p);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs cursor-pointer"
+                          >
+                            Chi Lương
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintPaidVoucher(p);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 cursor-pointer flex items-center gap-1"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Phiếu chi</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -286,26 +453,47 @@ export const PayrollScreen: React.FC = () => {
               </h2>
               <p className="text-xs text-slate-500">Kỳ thanh toán: Tháng {month}/{year}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setShowAddAllowance(true)}
                 className="flex items-center gap-1.5 text-xs bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-lg border hover:bg-slate-200"
               >
                 <PlusCircle className="w-4 h-4 text-slate-500" />
-                + Thêm Phụ Cấp / Thưởng Đột Xuất
+                + Phụ Cấp / Phạt
               </button>
-              {selectedPayroll.status !== 'APPROVED' ? (
+
+              {selectedPayroll.status === 'DRAFT' && (
                 <button
                   onClick={handleApprovePayroll}
-                  className="flex items-center gap-1.5 bg-emerald-600 text-white font-semibold text-xs px-4 py-2 rounded-lg hover:bg-emerald-700 shadow"
+                  className="flex items-center gap-1.5 bg-blue-600 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg hover:bg-blue-700 shadow"
                 >
-                  <Send className="w-4 h-4" />
-                  Duyệt & Gửi Phiếu Lương Về App Giáo Viên
+                  <Send className="w-3.5 h-3.5" />
+                  Duyệt Phiếu Lương
+                </button>
+              )}
+
+              {selectedPayroll.status !== 'PAID' ? (
+                <button
+                  onClick={() => handleOpenDisburseModal(selectedPayroll)}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  <span>Duyệt Chi Lương Vào Sổ Quỹ</span>
                 </button>
               ) : (
-                <span className="text-xs bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold">
-                  ✔ Đã Phê Duyệt & Bắn Thông Báo App
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    ĐÃ CHI LƯƠNG ({selectedPayroll.disbursedMethod === 'CASH' ? 'Tiền Mặt' : 'Chuyển Khoản'})
+                  </span>
+                  <button
+                    onClick={() => handlePrintPaidVoucher(selectedPayroll)}
+                    className="flex items-center gap-1 text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>In Phiếu Chi</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -486,6 +674,154 @@ export const PayrollScreen: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL DUYỆT CHI LƯƠNG & XUẤT PHIẾU CHI SỔ QUỸ */}
+      {showDisburseModal && selectedPayroll && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150 text-xs">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    Xác Nhận Chi Lương Vào Sổ Quỹ
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Hệ thống sẽ tự động tạo Phiếu Chi và trừ tiền trong quỹ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDisburseModal(false)}
+                className="w-7 h-7 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDisburse} className="space-y-4">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Nhân sự nhận lương:</span>
+                  <span className="font-bold text-slate-900">{selectedPayroll.user?.fullName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Kỳ chi trả:</span>
+                  <span className="font-semibold text-slate-800">
+                    Tháng {month}/{year}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                  <span className="font-bold text-slate-700">Lương thực lĩnh (Net):</span>
+                  <span className="text-base font-black text-emerald-600">
+                    {Number(selectedPayroll.netSalary).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Hình thức chi tiền:
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setDisburseMethod('BANK_TRANSFER')}
+                    className={`py-2 rounded-lg font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      disburseMethod === 'BANK_TRANSFER'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Chuyển Khoản</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDisburseMethod('CASH')}
+                    className={`py-2 rounded-lg font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      disburseMethod === 'CASH'
+                        ? 'bg-white text-emerald-700 shadow-xs'
+                        : 'text-slate-600'
+                    }`}
+                  >
+                    <Banknote className="w-3.5 h-3.5" />
+                    <span>Tiền Mặt</span>
+                  </button>
+                </div>
+              </div>
+
+              {disburseMethod === 'BANK_TRANSFER' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Thông tin tài khoản ngân hàng nhân sự:
+                  </label>
+                  <input
+                    type="text"
+                    value={disburseBankAccount}
+                    onChange={(e) => setDisburseBankAccount(e.target.value)}
+                    placeholder="Ví dụ: Techcombank - 1903... - NGUYEN VAN A"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Người duyệt chi / Thủ quỹ:
+                </label>
+                <input
+                  type="text"
+                  value={disburseCashierName}
+                  onChange={(e) => setDisburseCashierName(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Ghi chú chứng từ chi:
+                </label>
+                <textarea
+                  rows={2}
+                  value={disburseNote}
+                  onChange={(e) => setDisburseNote(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowDisburseModal(false)}
+                  className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={disbursing}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{disbursing ? 'Đang hạch toán...' : 'Xác Nhận Chi Lương'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE VOUCHER MODAL */}
+      {activePrintVoucher && (
+        <PrintableFundVoucherModal
+          voucher={activePrintVoucher}
+          onClose={() => setActivePrintVoucher(null)}
+        />
       )}
     </div>
   );

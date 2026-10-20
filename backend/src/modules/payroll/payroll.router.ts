@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
-import { PayrollStatus, ContractType, AllowanceType, EnrollmentStatus } from '@prisma/client';
+import { PayrollStatus, ContractType, AllowanceType, EnrollmentStatus, PaymentMethod } from '@prisma/client';
 
 export const payrollRouter = Router();
 
@@ -31,6 +31,18 @@ payrollRouter.get('/', async (req: Request, res: Response) => {
           },
         },
         items: true,
+        fundTransactions: {
+          select: {
+            id: true,
+            code: true,
+            type: true,
+            category: true,
+            amount: true,
+            paymentMethod: true,
+            transactionDate: true,
+            approvedBy: true,
+          },
+        },
       },
       orderBy: { netSalary: 'desc' },
     });
@@ -359,8 +371,32 @@ payrollRouter.post('/calculate', async (req: Request, res: Response) => {
         }
       }
 
-      const totalDeductions = 0;
-      const netSalary = workingSalary + newStudentBonusAmount + onTimeLevelupBonusAmount + totalAllowances - totalDeductions;
+      let totalDeductions = 0;
+
+      // Automatically inspect salary advances (Tạm ứng lương) for this staff in target month/year
+      const advances = await prisma.fundTransaction.findMany({
+        where: {
+          userId: staff.id,
+          category: 'TAM_UNG_LUONG',
+          targetMonth: m,
+          targetYear: y,
+          status: 'COMPLETED',
+        },
+      });
+
+      const totalAdvanceDeduction = advances.reduce((sum, a) => sum + Number(a.amount), 0);
+      if (totalAdvanceDeduction > 0) {
+        totalDeductions += totalAdvanceDeduction;
+        allowanceItems.push({
+          allowanceConfigId: null,
+          title: 'Tạm ứng lương đã nhận trong tháng',
+          amount: totalAdvanceDeduction,
+          isDeduction: true,
+          note: `Đã chi tạm ứng qua ${advances.map((a) => `${a.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'} (${Number(a.amount).toLocaleString('vi-VN')} đ)`).join('; ')}`,
+        });
+      }
+
+      const netSalary = Math.max(0, workingSalary + newStudentBonusAmount + onTimeLevelupBonusAmount + totalAllowances - totalDeductions);
 
       // Upsert payroll
       const payroll = await prisma.payroll.upsert({
@@ -493,6 +529,165 @@ payrollRouter.patch('/:id/approve', async (req: Request, res: Response) => {
       message: `Đã phê duyệt và phát hành phiếu lương thành công cho Giáo viên ${payroll.user.fullName}!`,
     });
   } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 5. Disburse Payroll & Automatically Create Payment Voucher in Fund Book (Duyệt Chi Lương & Tự Động Làm Phiếu Chi)
+payrollRouter.post('/:id/disburse', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod = 'CASH', bankAccountInfo, cashierName, note } = req.body;
+
+    const payroll = await prisma.payroll.findUnique({
+      where: { id },
+      include: { user: { include: { branch: true } } },
+    });
+
+    if (!payroll) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bảng lương' });
+    }
+
+    if (payroll.status === PayrollStatus.PAID) {
+      return res.status(400).json({ success: false, message: 'Bảng lương này đã được chi trả trước đó' });
+    }
+
+    const netAmount = Number(payroll.netSalary);
+    const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const voucherCode = `PC-LUONG-${datePrefix}-${randomSuffix}`;
+    const effectiveCashier = cashierName || 'Kế toán trưởng';
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Payment Voucher in Fund Book
+      const fundVoucher = await tx.fundTransaction.create({
+        data: {
+          code: voucherCode,
+          type: 'PAYMENT',
+          category: 'CHI_LUONG',
+          amount: netAmount,
+          paymentMethod: paymentMethod as PaymentMethod,
+          branchId: payroll.user.branchId,
+          recipientName: payroll.user.fullName,
+          recipientPhone: payroll.user.phone,
+          userId: payroll.user.id,
+          payrollId: payroll.id,
+          targetMonth: payroll.month,
+          targetYear: payroll.year,
+          transactionDate: new Date(),
+          bankAccountInfo: paymentMethod === 'BANK_TRANSFER' ? bankAccountInfo || null : null,
+          description:
+            note ||
+            `Chi trả lương tháng ${payroll.month}/${payroll.year} cho ${payroll.user.fullName} (${paymentMethod === 'CASH' ? 'Tiền mặt tại quầy' : 'Chuyển khoản ngân hàng'})`,
+          approvedBy: effectiveCashier,
+          status: 'COMPLETED',
+        },
+      });
+
+      // 2. Mark payroll as PAID
+      const updatedPayroll = await tx.payroll.update({
+        where: { id },
+        data: {
+          status: PayrollStatus.PAID,
+          disbursedAt: new Date(),
+          disbursedMethod: paymentMethod as PaymentMethod,
+          disbursedBy: effectiveCashier,
+        },
+        include: {
+          user: true,
+          items: true,
+          fundTransactions: true,
+        },
+      });
+
+      return { payroll: updatedPayroll, voucher: fundVoucher };
+    });
+
+    return res.json({
+      success: true,
+      data: result,
+      message: `Đã chi trả lương thành công cho ${payroll.user.fullName} (${netAmount.toLocaleString('vi-VN')} đ)! Hệ thống đã tự động xuất Phiếu Chi ${voucherCode} ghi vào Sổ Quỹ (${paymentMethod === 'CASH' ? 'Tiền mặt' : 'Tài khoản ngân hàng'}).`,
+    });
+  } catch (error: any) {
+    console.error('Error disbursing payroll:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 6. Batch Disburse Payrolls for a Month (Chi trả hàng loạt nhiều nhân sự)
+payrollRouter.post('/disburse-batch', async (req: Request, res: Response) => {
+  try {
+    const { payrollIds, paymentMethod = 'BANK_TRANSFER', cashierName } = req.body;
+
+    if (!Array.isArray(payrollIds) || payrollIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Danh sách bảng lương không hợp lệ' });
+    }
+
+    const payrolls = await prisma.payroll.findMany({
+      where: {
+        id: { in: payrollIds },
+        status: { not: PayrollStatus.PAID },
+      },
+      include: { user: true },
+    });
+
+    if (payrolls.length === 0) {
+      return res.status(400).json({ success: false, message: 'Không có bảng lương nào hợp lệ để chi trả' });
+    }
+
+    const effectiveCashier = cashierName || 'Kế toán trưởng';
+    const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    let successCount = 0;
+    let totalDisbursed = 0;
+
+    await prisma.$transaction(async (tx) => {
+      for (const p of payrolls) {
+        const netAmt = Number(p.netSalary);
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const voucherCode = `PC-LUONG-${datePrefix}-${randomSuffix}`;
+
+        await tx.fundTransaction.create({
+          data: {
+            code: voucherCode,
+            type: 'PAYMENT',
+            category: 'CHI_LUONG',
+            amount: netAmt,
+            paymentMethod: paymentMethod as PaymentMethod,
+            branchId: p.user.branchId,
+            recipientName: p.user.fullName,
+            recipientPhone: p.user.phone,
+            userId: p.user.id,
+            payrollId: p.id,
+            targetMonth: p.month,
+            targetYear: p.year,
+            transactionDate: new Date(),
+            description: `Chi trả lương tháng ${p.month}/${p.year} cho ${p.user.fullName} (${paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'})`,
+            approvedBy: effectiveCashier,
+            status: 'COMPLETED',
+          },
+        });
+
+        await tx.payroll.update({
+          where: { id: p.id },
+          data: {
+            status: PayrollStatus.PAID,
+            disbursedAt: new Date(),
+            disbursedMethod: paymentMethod as PaymentMethod,
+            disbursedBy: effectiveCashier,
+          },
+        });
+
+        successCount++;
+        totalDisbursed += netAmt;
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã chi trả lương thành công cho ${successCount} nhân sự với tổng số tiền ${totalDisbursed.toLocaleString('vi-VN')} đ! Toàn bộ Phiếu Chi đã được tự động hạch toán vào Sổ Quỹ.`,
+    });
+  } catch (error: any) {
+    console.error('Batch disburse error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

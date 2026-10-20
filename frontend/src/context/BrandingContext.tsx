@@ -15,6 +15,7 @@ export const DEFAULT_MODULE_NAMES: Record<string, string> = {
   DASHBOARD: 'Dashboard Thống Kê',
   POS: 'Thu Ngân POS',
   RECEIPTS: 'Duyệt Chứng Từ',
+  CASHBOOK: 'Sổ Quỹ Thu Chi',
   ACADEMIC: 'Giáo Vụ',
   PAYROLL: 'Bảng Lương',
   MOBILE: 'App Giáo Viên',
@@ -23,14 +24,14 @@ export const DEFAULT_MODULE_NAMES: Record<string, string> = {
 };
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  ADMIN: ['DASHBOARD', 'ADMIN', 'POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM'],
-  ACCOUNTANT: ['DASHBOARD', 'POS', 'RECEIPTS', 'PAYROLL'],
+  ADMIN: ['DASHBOARD', 'ADMIN', 'POS', 'RECEIPTS', 'CASHBOOK', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM'],
+  ACCOUNTANT: ['DASHBOARD', 'POS', 'RECEIPTS', 'CASHBOOK', 'PAYROLL'],
   ACADEMIC_AFFAIRS: ['DASHBOARD', 'ACADEMIC', 'CRM'],
   SALE: ['DASHBOARD', 'CRM', 'POS'],
   TEACHER: ['DASHBOARD', 'MOBILE'],
 };
 
-export const ALL_MODULE_KEYS = ['DASHBOARD', 'POS', 'RECEIPTS', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'];
+export const ALL_MODULE_KEYS = ['DASHBOARD', 'POS', 'RECEIPTS', 'CASHBOOK', 'ACADEMIC', 'PAYROLL', 'MOBILE', 'CRM', 'ADMIN'];
 
 export const DEFAULT_BRANDING: BrandingConfig = {
   systemName: 'EMS SBR',
