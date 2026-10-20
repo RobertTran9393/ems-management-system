@@ -195,9 +195,6 @@ export function App() {
     SALE: 'Tư Vấn Tuyển Sinh',
   };
 
-  const currentTabInfo = navTabs.find((t) => t.key === activeTab) || navTabs[0];
-  const CurrentIcon = currentTabInfo.icon;
-
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans">
       {/* Mobile Top Header */}
@@ -410,38 +407,6 @@ export function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-100 min-h-screen">
-        {/* Top Navbar on Desktop for Breadcrumb / Active Screen Context */}
-        <header className="hidden lg:flex items-center justify-between px-8 h-16 bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-sm"
-              style={{ backgroundColor: branding.systemPrimaryColor }}
-            >
-              <CurrentIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-800 leading-tight">
-                {currentTabInfo.label}
-              </h1>
-              <p className="text-[11px] text-slate-500">
-                Hệ thống quản lý {branding.systemName} • {branding.systemSlogan}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-xs font-semibold text-slate-800">{currentUser.fullName}</div>
-              <div className="text-[11px] text-indigo-600 font-medium">
-                {roleNameMap[currentUser.role] || currentUser.role}
-              </div>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-white shadow-sm">
-              {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'U'}
-            </div>
-          </div>
-        </header>
-
         {/* Screen Content */}
         <main className="flex-1">
           {activeTab === 'DASHBOARD' && <DashboardScreen />}
