@@ -366,6 +366,9 @@ model Order {
   totalTuitionFee  Decimal              @default(0) @map("total_tuition_fee") @db.Decimal(12, 2)
   totalProductFee  Decimal              @default(0) @map("total_product_fee") @db.Decimal(12, 2)
   discountAmount   Decimal              @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  discountType     String?              @map("discount_type") // SCHOLARSHIP, PROMOTION, VOUCHER, SIBLING, CUSTOM
+  discountRate     Decimal?             @default(0) @map("discount_rate") @db.Decimal(5, 2)
+  discountReason   String?              @map("discount_reason")
   finalTotal       Decimal              @map("final_total") @db.Decimal(12, 2)
   paidAmount       Decimal              @default(0) @map("paid_amount") @db.Decimal(12, 2)
   remainingDebt    Decimal              @default(0) @map("remaining_debt") @db.Decimal(12, 2)

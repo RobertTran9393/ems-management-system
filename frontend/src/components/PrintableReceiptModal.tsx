@@ -12,6 +12,11 @@ interface ReceiptData {
   date: string | Date;
   branchName?: string;
   note?: string;
+  totalTuitionFee?: number;
+  totalProductFee?: number;
+  discountAmount?: number;
+  discountReason?: string;
+  finalTotal?: number;
 }
 
 export const PrintableReceiptModal: React.FC<{
@@ -69,6 +74,25 @@ export const PrintableReceiptModal: React.FC<{
               <span className="text-slate-500">Hình thức thanh toán:</span>
               <span className="font-bold text-emerald-700">TIỀN MẶT TẠI QUẦY (CASH)</span>
             </div>
+            {Boolean(receipt.discountAmount && receipt.discountAmount > 0) && (
+              <>
+                <div className="flex justify-between py-1 border-b border-dotted text-slate-500">
+                  <span>Học phí & dịch vụ gốc:</span>
+                  <span>{(((receipt.totalTuitionFee || 0) + (receipt.totalProductFee || 0)) || (Number(receipt.finalTotal || 0) + Number(receipt.discountAmount || 0))).toLocaleString('vi-VN')} đ</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-dotted text-amber-700 font-semibold">
+                  <span>Ưu đãi / Giảm giá / Học bổng:</span>
+                  <span>
+                    - {Number(receipt.discountAmount).toLocaleString('vi-VN')} đ
+                    {receipt.discountReason ? ` (${receipt.discountReason})` : ''}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-dotted text-slate-700 font-semibold">
+                  <span>Tổng tiền sau ưu đãi:</span>
+                  <span>{Number(receipt.finalTotal || receipt.amount).toLocaleString('vi-VN')} đ</span>
+                </div>
+              </>
+            )}
             {receipt.note && (
               <div className="flex justify-between py-1 border-b border-dotted">
                 <span className="text-slate-500">Nội dung / Ghi chú:</span>

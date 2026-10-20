@@ -1,6 +1,23 @@
 import { API_BASE_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { ShoppingCart, QrCode, CheckCircle2, UserCheck, Layers, Package, CreditCard, AlertCircle, Banknote, Printer } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ShoppingCart,
+  QrCode,
+  CheckCircle2,
+  UserCheck,
+  Layers,
+  Package,
+  CreditCard,
+  AlertCircle,
+  Banknote,
+  Printer,
+  Sparkles,
+  GraduationCap,
+  Tag,
+  Percent,
+  X,
+  Gift,
+} from 'lucide-react';
 import { PrintableReceiptModal } from './PrintableReceiptModal';
 
 export const POSScreen: React.FC = () => {
@@ -16,7 +33,12 @@ export const POSScreen: React.FC = () => {
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [selectedComboId, setSelectedComboId] = useState<string>('');
   const [selectedProducts, setSelectedProducts] = useState<{ [productId: string]: number }>({});
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  
+  // Discount, Scholarship & Promotion state
+  const [discountType, setDiscountType] = useState<'NONE' | 'SCHOLARSHIP' | 'PROMOTION' | 'SIBLING' | 'VOUCHER' | 'CUSTOM'>('NONE');
+  const [discountUnit, setDiscountUnit] = useState<'PERCENT' | 'VND'>('VND');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState<string>('');
 
   // Installments & Payment Method state
   const [paymentMode, setPaymentMode] = useState<'FULL' | 'INSTALLMENTS'>('INSTALLMENTS');
@@ -105,6 +127,35 @@ export const POSScreen: React.FC = () => {
     return acc + (prod ? Number(prod.sellingPrice) * qty : 0);
   }, 0);
 
+  // Compute discount amount (Học bổng / Ưu đãi / Voucher)
+  const discountAmount = useMemo(() => {
+    if (discountType === 'NONE' || discountValue <= 0) return 0;
+    if (discountUnit === 'PERCENT') {
+      const base = tuitionFee > 0 ? tuitionFee : (tuitionFee + productFee);
+      return Math.min(base, Math.round((base * discountValue) / 100));
+    }
+    return Math.min(tuitionFee + productFee, discountValue);
+  }, [discountType, discountUnit, discountValue, tuitionFee, productFee]);
+
+  const handleApplyPresetDiscount = (
+    type: 'SCHOLARSHIP' | 'PROMOTION' | 'SIBLING' | 'VOUCHER' | 'CUSTOM',
+    unit: 'PERCENT' | 'VND',
+    value: number,
+    reason: string
+  ) => {
+    setDiscountType(type);
+    setDiscountUnit(unit);
+    setDiscountValue(value);
+    setDiscountReason(reason);
+  };
+
+  const handleClearDiscount = () => {
+    setDiscountType('NONE');
+    setDiscountUnit('VND');
+    setDiscountValue(0);
+    setDiscountReason('');
+  };
+
   const finalTotal = Math.max(0, tuitionFee + productFee - Number(discountAmount));
 
   useEffect(() => {
@@ -186,6 +237,9 @@ export const POSScreen: React.FC = () => {
           comboId: selectedComboId || undefined,
           products: productsPayload,
           discountAmount,
+          discountType: discountType !== 'NONE' ? discountType : undefined,
+          discountRate: discountUnit === 'PERCENT' ? discountValue : 0,
+          discountReason: discountReason || undefined,
           installments: installmentsPayload,
           initialPaymentMethod: paymentMethod,
           cashierName: cashierName || currentUser?.fullName || 'Thu ngân tại quầy',
@@ -207,6 +261,11 @@ export const POSScreen: React.FC = () => {
             parentName: selectedLead?.parentName || 'Phụ huynh',
             parentPhone: selectedLead?.parentPhone,
             amount: installment1Amount,
+            totalTuitionFee: tuitionFee,
+            totalProductFee: productFee,
+            discountAmount,
+            discountReason: discountReason || (discountType === 'SCHOLARSHIP' ? 'Học bổng' : 'Ưu đãi trung tâm'),
+            finalTotal,
             cashierName,
             date: new Date(),
             branchName: branches.find((b) => b.id === selectedBranchId)?.name,
@@ -418,15 +477,253 @@ export const POSScreen: React.FC = () => {
               })}
             </div>
           </div>
+
+          {/* Mục 4: Ưu Đãi / Giảm Giá / Học Bổng */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                Mục 4: Chính Sách Ưu Đãi / Giảm Giá / Học Bổng
+              </h2>
+              {discountType !== 'NONE' && (
+                <button
+                  type="button"
+                  onClick={handleClearDiscount}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Xóa ưu đãi</span>
+                </button>
+              )}
+            </div>
+
+            {/* Quick Presets Group 1: Học bổng */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-purple-700">
+                <GraduationCap className="w-4 h-4" />
+                <span>Chính Sách Học Bổng (Scholarship):</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('SCHOLARSHIP', 'PERCENT', 100, 'Học bổng 100% (Toàn phần)')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    discountType === 'SCHOLARSHIP' && discountValue === 100
+                      ? 'border-purple-600 bg-purple-100/80 text-purple-900 ring-2 ring-purple-400'
+                      : 'border-slate-200 bg-purple-50/40 text-purple-800 hover:bg-purple-100/50'
+                  }`}
+                >
+                  <span className="text-sm font-black text-purple-700">100%</span>
+                  <span className="text-[11px] font-medium text-slate-600">Toàn phần</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('SCHOLARSHIP', 'PERCENT', 50, 'Học bổng 50% (Bán phần)')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    discountType === 'SCHOLARSHIP' && discountValue === 50
+                      ? 'border-purple-600 bg-purple-100/80 text-purple-900 ring-2 ring-purple-400'
+                      : 'border-slate-200 bg-purple-50/40 text-purple-800 hover:bg-purple-100/50'
+                  }`}
+                >
+                  <span className="text-sm font-black text-purple-700">50%</span>
+                  <span className="text-[11px] font-medium text-slate-600">Bán phần</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('SCHOLARSHIP', 'PERCENT', 30, 'Học bổng tài năng 30%')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    discountType === 'SCHOLARSHIP' && discountValue === 30
+                      ? 'border-purple-600 bg-purple-100/80 text-purple-900 ring-2 ring-purple-400'
+                      : 'border-slate-200 bg-purple-50/40 text-purple-800 hover:bg-purple-100/50'
+                  }`}
+                >
+                  <span className="text-sm font-black text-purple-700">30%</span>
+                  <span className="text-[11px] font-medium text-slate-600">Tài năng</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('SCHOLARSHIP', 'PERCENT', 20, 'Học bổng khuyến học 20%')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    discountType === 'SCHOLARSHIP' && discountValue === 20
+                      ? 'border-purple-600 bg-purple-100/80 text-purple-900 ring-2 ring-purple-400'
+                      : 'border-slate-200 bg-purple-50/40 text-purple-800 hover:bg-purple-100/50'
+                  }`}
+                >
+                  <span className="text-sm font-black text-purple-700">20%</span>
+                  <span className="text-[11px] font-medium text-slate-600">Khuyến học</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Presets Group 2: Ưu đãi & Khuyến mãi */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-700">
+                <Tag className="w-4 h-4" />
+                <span>Ưu Đãi & Khuyến Mãi Phổ Biến:</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('SIBLING', 'PERCENT', 10, 'Ưu đãi Anh chị em ruột (-10%)')}
+                  className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                    discountType === 'SIBLING'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-400'
+                      : 'border-slate-200 bg-slate-50 hover:bg-amber-50/50 text-slate-700'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-amber-800">Anh chị em</div>
+                  <div className="text-[11px] text-slate-500">Giảm 10% học phí</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('PROMOTION', 'VND', 500000, 'Ưu đãi Đăng ký sớm (-500.000 đ)')}
+                  className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                    discountType === 'PROMOTION' && discountValue === 500000
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-400'
+                      : 'border-slate-200 bg-slate-50 hover:bg-amber-50/50 text-slate-700'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-amber-800">Đăng ký sớm</div>
+                  <div className="text-[11px] text-slate-500">-500.000 đ</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('PROMOTION', 'PERCENT', 15, 'Học viên cũ tái tục khóa tiếp theo (-15%)')}
+                  className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                    discountType === 'PROMOTION' && discountValue === 15
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-400'
+                      : 'border-slate-200 bg-slate-50 hover:bg-amber-50/50 text-slate-700'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-amber-800">Học sinh cũ</div>
+                  <div className="text-[11px] text-slate-500">Tái tục giảm 15%</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDiscount('VOUCHER', 'VND', 200000, 'Voucher quà tặng / Tri ân (-200.000 đ)')}
+                  className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                    discountType === 'VOUCHER' && discountValue === 200000
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-400'
+                      : 'border-slate-200 bg-slate-50 hover:bg-amber-50/50 text-slate-700'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-amber-800">Voucher tri ân</div>
+                  <div className="text-[11px] text-slate-500">-200.000 đ</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Input Block */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Hoặc nhập mức giảm giá tùy chỉnh:</span>
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountUnit('VND');
+                      if (discountType === 'NONE') setDiscountType('CUSTOM');
+                    }}
+                    className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                      discountUnit === 'VND' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'
+                    }`}
+                  >
+                    VNĐ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountUnit('PERCENT');
+                      if (discountType === 'NONE') setDiscountType('CUSTOM');
+                    }}
+                    className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                      discountUnit === 'PERCENT' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'
+                    }`}
+                  >
+                    %
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-slate-500 block mb-0.5">
+                    {discountUnit === 'PERCENT' ? 'Tỷ lệ giảm (%):' : 'Số tiền giảm (VNĐ):'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={discountUnit === 'PERCENT' ? 100 : undefined}
+                    value={discountValue || ''}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDiscountValue(val);
+                      if (val > 0 && discountType === 'NONE') {
+                        setDiscountType('CUSTOM');
+                      }
+                    }}
+                    placeholder={discountUnit === 'PERCENT' ? 'Ví dụ: 10' : 'Ví dụ: 300000'}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-500 block mb-0.5">Lý do / Tên chương trình ưu đãi:</label>
+                  <input
+                    type="text"
+                    value={discountReason}
+                    onChange={(e) => {
+                      setDiscountReason(e.target.value);
+                      if (discountType === 'NONE') setDiscountType('CUSTOM');
+                    }}
+                    placeholder="VD: Học bổng tài năng, Giảm giá người quen..."
+                    className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Active Discount Callout */}
+              {discountAmount > 0 && (
+                <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">
+                        {discountReason || (discountType === 'SCHOLARSHIP' ? 'Học bổng' : 'Ưu đãi đặc biệt')}
+                      </div>
+                      <div className="text-[11px] text-amber-700">
+                        {discountUnit === 'PERCENT' ? `Giảm ${discountValue}% học phí` : 'Giảm trực tiếp'} • Tiết kiệm{' '}
+                        <strong>{discountAmount.toLocaleString('vi-VN')} đ</strong> cho phụ huynh
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleClearDiscount}
+                    className="w-6 h-6 rounded-full hover:bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* CỘT PHẢI (40%): Thanh toán & Tiền Mặt / VietQR */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Mục 4: Tổng hợp Đơn hàng */}
+          {/* Mục 5: Tổng hợp Đơn hàng */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-3">
               <CreditCard className="w-5 h-5 text-blue-600" />
-              Mục 4: Tổng hợp Đơn hàng
+              Mục 5: Tổng hợp Đơn hàng
             </h2>
             <div className="space-y-2 text-sm border-b pb-3">
               <div className="flex justify-between text-slate-600">
@@ -438,14 +735,23 @@ export const POSScreen: React.FC = () => {
                 <span className="font-medium text-slate-800">{productFee.toLocaleString('vi-VN')} đ</span>
               </div>
               <div className="flex justify-between items-center text-slate-600">
-                <span>(-) Giảm giá / Voucher:</span>
-                <input
-                  type="number"
-                  value={discountAmount}
-                  onChange={(e) => setDiscountAmount(Number(e.target.value))}
-                  className="w-28 text-right border border-slate-300 rounded px-2 py-1 text-sm"
-                />
+                <span className="flex items-center gap-1.5">
+                  <span>(-) Ưu đãi / Học bổng:</span>
+                  {discountType !== 'NONE' && discountAmount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                      {discountType === 'SCHOLARSHIP' ? 'Học bổng' : 'Ưu đãi'}
+                    </span>
+                  )}
+                </span>
+                <span className={`font-bold ${discountAmount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                  {discountAmount > 0 ? `- ${discountAmount.toLocaleString('vi-VN')} đ` : '0 đ'}
+                </span>
               </div>
+              {discountReason && discountAmount > 0 && (
+                <div className="text-[11px] text-amber-700 italic text-right">
+                  ({discountReason})
+                </div>
+              )}
             </div>
             <div className="flex justify-between items-center pt-3 text-base font-bold text-slate-900">
               <span>(=) TỔNG THANH TOÁN:</span>
@@ -453,10 +759,10 @@ export const POSScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Mục 5: Cấu hình Chia đợt & Hình thức thu tiền */}
+          {/* Mục 6: Cấu hình Chia đợt & Hình thức thu tiền */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base font-semibold text-slate-800">
-              Mục 5: Đóng phí & Hình thức thu tiền
+              Mục 6: Đóng phí & Hình thức thu tiền
             </h2>
 
             {/* Chế độ đóng phí */}
