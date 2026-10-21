@@ -7,11 +7,11 @@ services:
     container_name: ems_postgres
     restart: always
     environment:
-      POSTGRES_USER: ems_user
-      POSTGRES_PASSWORD: ems_password
-      POSTGRES_DB: ems_db
+      POSTGRES_USER: ${POSTGRES_USER:-ems_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ems_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ems_db}
     ports:
-      - '5432:5432'
+      - '${DATABASE_PORT:-5432}:5432'
     volumes:
       - ems_pgdata:/var/lib/postgresql/data
     networks:
@@ -26,7 +26,11 @@ services:
     restart: always
     environment:
       PORT: 8000
-      DATABASE_URL: postgres://ems_user:ems_password@postgres:5432/ems_db?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://ems_user:ems_password@postgres:5432/ems_db?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-ems_jwt_super_secret_key_change_me_2026}
+      VIETQR_BANK_ID: ${VIETQR_BANK_ID:-970422}
+      VIETQR_ACCOUNT_NO: ${VIETQR_ACCOUNT_NO:-123456789}
+      VIETQR_ACCOUNT_NAME: ${VIETQR_ACCOUNT_NAME:-TRUNG TAM TOAN TRI TUE SBR}
       NODE_ENV: production
     ports:
       - '8000:8000'
@@ -43,7 +47,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     container_name: ems_frontend
     restart: always
     ports:
